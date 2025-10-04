@@ -1,16 +1,32 @@
+- title: "String"
+  desc: "Output a string constant."
+  end: false
+  category: "Text"
+  fields:
+    - name: "value"
+      type: !String
+      value: !String ""
+      kind: !Enter
+  inputs:
+  outputs:
+    - name: "const"
+      type: !String
+      default: !String ""
+  py_impl: "{o_const} = {f_value}"
+
 - title: "Const"
   desc: "Outputs a constant value."
   end: false
   category: "Math"
   fields:
     - name: "value"
-      type: !Multi [Int, Float, String]
+      type: !Multi [Int, Float]
       value: !Int 0
       kind: !Enter
   inputs:
   outputs:
     - name: "const"
-      type: !Multi [Int, Float, String]
+      type: !Multi [Int, Float]
       default: !Int 0
   py_impl: "{o_const} = {f_value}"
 
@@ -21,20 +37,19 @@
   fields:
   inputs:
     - name: "A"
-      type: !Multi [Bool, Int, Float, String]
+      type: !Multi [Int, Float]
       default: !Int 0
     - name: "B"
-      type: !Multi [Bool, Int, Float, String]
+      type: !Multi [Int, Float]
       default: !Int 0
   outputs:
     - name: "result"
       type: !Int
       default: !Int 0
-  # py_impl: |
-  #   if type({i_A}) != type({i_B}):
-  #     panic("{title}#{id}: Type mismatch: {} vs {}".format(type({i_A}), type({i_B})))
-  #   {o_result} = {i_A} + {i_B}
-  py_impl: "{o_result} = {i_A} + {i_B}"
+  py_impl: |
+    if "{ti_A}" != "{ti_B}":
+      panic("{title}#{id}: Type mismatch: {ti_A} vs {ti_B}")
+    {o_result} = {i_A} + {i_B}
 
 - title: "Print"
   desc: "Prints the input value to the console."

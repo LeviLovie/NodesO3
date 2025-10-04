@@ -2,6 +2,8 @@ use anyhow::{bail, Context, Result};
 
 use crate::compiler::{IOMap, NodeMap, UpstreamTraversal};
 
+const SYS_MODULE: &str = include_str!("../python/sys.py");
+
 pub fn write(
     debug_info: bool,
     node_map: NodeMap,
@@ -15,9 +17,12 @@ pub fn write(
         env!("CARGO_PKG_VERSION")
     ));
 
+    output.push_str(SYS_MODULE);
+    output.push('\n');
+
     for node_id in exec_order {
         if let Some(node) = node_map.get(*node_id) {
-            let node_output = write_node(debug_info, node, &io_map)
+            let node_output = write_node(debug_info, node, &node_map, &io_map)
                 .context(format!("Failed to write node {}", node.id))?;
             output.push_str(&node_output)
         } else {
@@ -28,13 +33,25 @@ pub fn write(
     Ok(output)
 }
 
-fn write_node(debug_info: bool, node: &crate::graph::Node, io_map: &IOMap) -> Result<String> {
+fn write_node(
+    debug_info: bool,
+    node: &crate::graph::Node,
+    node_map: &NodeMap,
+    io_map: &IOMap,
+) -> Result<String> {
     let mut output = String::new();
     if debug_info {
-        output.push_str(&format!("# Node {}#{}\n", node.desc.title, node.id));
+        output.push_str(&format!("# Node {}#{}\n\n", node.desc.title, node.id));
     }
 
     let mut py_impl = node.desc.py_impl.trim().trim_end_matches("\n").to_string();
+    replace(
+        &mut py_impl,
+        "{title}".to_string(),
+        node.desc.title.to_string(),
+    );
+    replace(&mut py_impl, "{id}".to_string(), node.id.to_string());
+
     for field in &node.desc.fields {
         replace(
             &mut py_impl,
@@ -42,8 +59,24 @@ fn write_node(debug_info: bool, node: &crate::graph::Node, io_map: &IOMap) -> Re
             field.value.to_string(),
         );
     }
+
     for (i, input) in node.desc.inputs.iter().enumerate() {
         if let Some(&(from_node, from_port)) = io_map.get((node.id, i)) {
+            let type_str = if let Some(from_node) = node_map.get(from_node) {
+                if let Some(from_port) = from_node.desc.outputs.get(from_port) {
+                    from_port.data_type.to_string()
+                } else {
+                    bail!(
+                        "Output port {} of node {} not found",
+                        from_port,
+                        from_node.id
+                    );
+                }
+            } else {
+                bail!("Node ID {} not found in NodeMap", from_node);
+            };
+            replace(&mut py_impl, format!("{{ti_{}}}", input.name), type_str);
+
             replace(
                 &mut py_impl,
                 format!("{{i_{}}}", input.name),
@@ -54,6 +87,7 @@ fn write_node(debug_info: bool, node: &crate::graph::Node, io_map: &IOMap) -> Re
             bail!("Input {} of node {} is not connected", input.name, node.id);
         }
     }
+
     for (i, output) in node.desc.outputs.iter().enumerate() {
         replace(
             &mut py_impl,
@@ -61,6 +95,7 @@ fn write_node(debug_info: bool, node: &crate::graph::Node, io_map: &IOMap) -> Re
             format!("output_{}_{}", node.id, i),
         );
     }
+
     output.push_str(&py_impl);
     output.push_str("\n");
     if debug_info {

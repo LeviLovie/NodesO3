@@ -219,6 +219,34 @@ impl App {
                     });
                 });
 
+                ui.menu_button("Descs", |ui| {
+                    Grid::new("Descs").show(ui, |ui| {
+                        if ui.button("Clear").clicked() {
+                            self.workspace
+                                .as_mut()
+                                .unwrap()
+                                .data
+                                .desc_storage
+                                .descs
+                                .clear();
+                            ui.close();
+                        }
+                        ui.end_row();
+
+                        if ui.button("Reload").clicked() {
+                            self.load_nodes();
+                            ui.close();
+                        }
+                        ui.end_row();
+
+                        if ui.button("Re-attach").clicked() {
+                            self.workspace.as_mut().unwrap().reattach();
+                            ui.close();
+                        }
+                        ui.end_row();
+                    });
+                });
+
                 ui.menu_button("Compile", |ui| {
                     ui.checkbox(
                         &mut self.shared.borrow_mut().compile_debug_info,

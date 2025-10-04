@@ -76,6 +76,19 @@ impl Workspace {
         self.render_dragging_connection(ctx);
     }
 
+    pub fn reattach(&mut self) {
+        for node in &mut self.data.nodes {
+            node.desc = self
+                .data
+                .desc_storage
+                .descs
+                .iter()
+                .find(|d| d.title == node.desc.title)
+                .unwrap()
+                .clone();
+        }
+    }
+
     fn render_connections(&self, ctx: &Context) {
         let painter_bg = ctx.layer_painter(LayerId::background());
 
