@@ -1,0 +1,32 @@
+- title: "Const i32"
+  category: "Math"
+  inputs:
+  outputs:
+    - name: "value"
+      data_type: int
+      default: !Int 0
+  py_impl: "{out} = {i_value}"
+
+- title: "Add i32"
+  category: "Math"
+  inputs:
+    - name: "A"
+      data_type: int
+      default: !Int 0
+    - name: "B"
+      data_type: int
+      default: !Int 0
+  outputs:
+    - name: "Result"
+      data_type: int
+      default: !Int 0
+  py_impl: "{out} = {i_A} + {i_B}"
+
+- title: "Print i23"
+  category: "Debug"
+  inputs:
+    - name: "value"
+      data_type: int
+      default: !Int 0
+  outputs:
+  py_impl: "print({i_value})"

@@ -1,8 +1,14 @@
+mod graph;
+
 use iced::{
     event,
+    keyboard::key::Code,
     widget::canvas::{self, Canvas, Frame, Geometry, Path, Stroke, Text as CanvasText},
-    Element, Pixels, Point, Size, Subscription, Task, Theme, Vector,
+    Element, Length, Pixels, Point, Size, Subscription, Task, Theme, Vector,
 };
+use iced_widget::{button, text, Column, Container};
+
+use graph::{DescStorage, Node};
 
 pub fn main() -> iced::Result {
     iced::application(App::title, App::update, App::view)
@@ -13,6 +19,8 @@ pub fn main() -> iced::Result {
 #[derive(Debug, Clone)]
 enum Message {
     Main,
+    OpenAddMenu,
+    AddNode(usize),
     CursorMoved(Point),
     MousePressed,
     MouseReleased,
@@ -31,18 +39,23 @@ impl Message {
                 }
                 _ => Message::Main,
             },
+            iced::Event::Keyboard(key_event) => match key_event {
+                iced::keyboard::Event::KeyPressed {
+                    physical_key,
+                    modifiers,
+                    ..
+                } => {
+                    if physical_key == Code::KeyA && modifiers.shift() {
+                        Message::OpenAddMenu
+                    } else {
+                        Message::Main
+                    }
+                }
+                _ => Message::Main,
+            },
             _ => Message::Main,
         }
     }
-}
-
-struct Node {
-    id: usize,
-    title: String,
-    pos: Point,
-    size: Size,
-    inputs: usize,
-    outputs: usize,
 }
 
 struct Connection {
@@ -57,43 +70,26 @@ enum Dragging {
 
 struct App {
     nodes: Vec<Node>,
+    desc_storage: DescStorage,
     connections: Vec<Connection>,
     dragging: Option<Dragging>,
     cursor: Point,
+
+    add_menu: Option<Point>,
 }
 
 impl Default for App {
     fn default() -> Self {
+        let yaml = std::fs::read_to_string("nodes.yaml").unwrap_or_default();
+        let desc_storage = DescStorage::from(yaml).expect("Failed to load node descriptions");
         Self {
-            nodes: vec![
-                Node {
-                    id: 0,
-                    title: "Const".into(),
-                    pos: Point::new(100.0, 100.0),
-                    size: Size::new(120.0, 60.0),
-                    inputs: 0,
-                    outputs: 1,
-                },
-                Node {
-                    id: 1,
-                    title: "Const".into(),
-                    pos: Point::new(100.0, 200.0),
-                    size: Size::new(120.0, 60.0),
-                    inputs: 0,
-                    outputs: 1,
-                },
-                Node {
-                    id: 2,
-                    title: "Add".into(),
-                    pos: Point::new(400.0, 200.0),
-                    size: Size::new(120.0, 60.0),
-                    inputs: 2,
-                    outputs: 1,
-                },
-            ],
+            nodes: vec![],
+            desc_storage,
             connections: vec![],
             dragging: None,
             cursor: Point::ORIGIN,
+
+            add_menu: None,
         }
     }
 }
@@ -110,7 +106,27 @@ impl App {
     pub fn update(&mut self, msg: Message) -> Task<Message> {
         match msg {
             Message::Main => Task::none(),
+            Message::OpenAddMenu => {
+                self.add_menu = Some(self.cursor);
+                Task::none()
+            }
+            Message::AddNode(index) => {
+                let desc = &self.desc_storage.descs[index];
+                let new_node = Node {
+                    id: self.nodes.len(),
+                    pos: self.add_menu.unwrap_or(self.cursor),
+                    size: Size::new(
+                        120.0,
+                        30.0 + ((desc.inputs.len() + desc.outputs.len()) as f32) * 20.0,
+                    ),
+                    desc: desc.clone(),
+                };
+                self.nodes.push(new_node);
+                self.add_menu = None;
+                Task::none()
+            }
             Message::CursorMoved(p) => {
+                self.cursor = p;
                 match &mut self.dragging {
                     Some(Dragging::Node { node_id, offset }) => {
                         if let Some(node) = self.nodes.iter_mut().find(|n| n.id == *node_id) {
@@ -121,7 +137,6 @@ impl App {
                     Some(Dragging::Connection { .. }) => {}
                     None => {}
                 }
-                self.cursor = p;
                 Task::none()
             }
             Message::MousePressed => {
@@ -138,7 +153,7 @@ impl App {
                         });
                     }
 
-                    for i in 0..node.outputs {
+                    for i in 0..node.desc.outputs.len() {
                         let port_pos = self.port_position(node.id, i, true);
                         let diff = port_pos - self.cursor;
                         let distance = (diff.x.powi(2) + diff.y.powi(2)).sqrt();
@@ -158,7 +173,7 @@ impl App {
                 match self.dragging.take() {
                     Some(Dragging::Connection { node_id, port_id }) => {
                         for node in &self.nodes {
-                            for i in 0..node.inputs {
+                            for i in 0..node.desc.inputs.len() {
                                 let port_pos = self.port_position(node.id, i, false);
                                 let diff = port_pos - self.cursor;
                                 let distance = (diff.x.powi(2) + diff.y.powi(2)).sqrt();
@@ -185,10 +200,28 @@ impl App {
     }
 
     pub fn view(&self) -> Element<'_, Message> {
-        Canvas::new(NodeGraph { app: self })
-            .width(iced::Length::Fill)
-            .height(iced::Length::Fill)
-            .into()
+        let canvas = Canvas::new(NodeGraph { app: self })
+            .width(Length::Fill)
+            .height(Length::Fill);
+
+        if let Some(_menu_pos) = self.add_menu {
+            let mut menu_column = Column::new().spacing(2);
+            for (i, desc) in self.desc_storage.descs.iter().enumerate() {
+                let btn = button(text(&desc.title)).on_press(Message::AddNode(i));
+                menu_column = menu_column.push(btn);
+            }
+
+            let menu = Container::new(menu_column)
+                .width(Length::Fixed(200.0))
+                .padding(5);
+
+            iced::widget::Stack::new()
+                .push(canvas)
+                .push(menu) // menu will be on top
+                .into()
+        } else {
+            canvas.into()
+        }
     }
 
     fn verify_connections(&mut self) {
@@ -242,14 +275,14 @@ impl<'a> NodeGraph<'a> {
         frame.fill(&title_bar, iced::Color::from_rgb(0.1, 0.1, 0.2));
 
         // Inputs
-        for i in 0..node.inputs {
+        for i in 0..node.desc.inputs.len() {
             let p = self.app.port_position(node.id, i, false);
             let circle = Path::circle(p, 5.0);
             frame.fill(&circle, iced::Color::from_rgb(0.7, 0.2, 0.2));
         }
 
         // Outputs
-        for i in 0..node.outputs {
+        for i in 0..node.desc.outputs.len() {
             let p = self.app.port_position(node.id, i, true);
             let circle = Path::circle(p, 5.0);
             frame.fill(&circle, iced::Color::from_rgb(0.2, 0.7, 0.2));
@@ -258,7 +291,7 @@ impl<'a> NodeGraph<'a> {
         // Title text
         let title_pos = Point::new(node.pos.x + 2.0, node.pos.y);
         frame.fill_text(CanvasText {
-            content: node.title.clone(),
+            content: node.desc.title.clone(),
             position: title_pos,
             color: iced::Color::WHITE,
             size: Pixels(16.0),

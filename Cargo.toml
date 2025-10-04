@@ -8,3 +8,5 @@ anyhow = "1.0.100"
 iced = "0.13.1"
 iced_graphics = "0.13.0"
 iced_widget = { version = "0.13.4", features = ["canvas"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_yaml_ng = "0.10.0"
