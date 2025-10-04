@@ -1,3 +1,4 @@
+mod compiler;
 mod graph;
 mod workspace;
 
@@ -5,10 +6,11 @@ use std::{cell::RefCell, rc::Rc};
 
 use anyhow::{anyhow, Context as AnyhowContext, Result};
 use eframe::egui::{
-    self, Align, CentralPanel, Context, Grid, Layout, MenuBar, Pos2, RichText, TopBottomPanel,
-    Window,
+    self, Align, Button, CentralPanel, Context, Grid, Layout, MenuBar, Pos2, RichText,
+    TopBottomPanel, Window,
 };
 
+use compiler::Compiler;
 use graph::Connection;
 use workspace::Workspace;
 
@@ -213,6 +215,30 @@ impl App {
                         ui.label("Shift+A");
                         ui.end_row();
                     });
+                });
+
+                ui.menu_button("Compile", |ui| {
+                    let final_nodes = self
+                        .workspace
+                        .as_ref()
+                        .unwrap()
+                        .data
+                        .nodes
+                        .iter()
+                        .filter(|n| n.desc.end)
+                        .collect::<Vec<_>>();
+                    if ui
+                        .add_enabled(final_nodes.len() == 1, Button::new("Compile"))
+                        .clicked()
+                    {
+                        let mut compiler = Compiler::new(
+                            self.workspace.as_ref().unwrap().data.nodes.clone(),
+                            self.workspace.as_ref().unwrap().data.connections.clone(),
+                            final_nodes[0].id,
+                        );
+                        compiler.compile();
+                        ui.close();
+                    }
                 });
 
                 ui.menu_button("Help", |ui| {

@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use super::PortDesc;
 use crate::graph::FieldDesc;
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Node {
     pub id: usize,
     pub pos: (f32, f32),
@@ -14,9 +14,10 @@ pub struct Node {
     pub stabilize_frames: usize,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeDesc {
     pub title: String,
+    pub end: bool,
     pub desc: String,
     pub category: String,
     pub fields: Vec<FieldDesc>,

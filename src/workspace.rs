@@ -107,8 +107,12 @@ impl Workspace {
     fn render_nodes(&mut self, ctx: &Context) {
         for node in &mut self.data.nodes {
             let id = Id::new(format!("{}", node.id));
-            ctx.memory_mut(|mem| mem.data.remove::<Rect>(id));
-            Window::new(&node.desc.title)
+            let stroke = if node.desc.end {
+                Stroke::new(1.0, Color32::from_hex("#C0C000").unwrap())
+            } else {
+                Stroke::new(1.0, Color32::from_gray(100))
+            };
+            Window::new(format!("{}#{}", node.desc.title, node.id))
                 .id(id)
                 .fixed_pos(node.pos)
                 .max_width(node.size.1)
@@ -119,7 +123,7 @@ impl Workspace {
                     inner_margin: 6.0.into(),
                     corner_radius: 0.into(),
                     fill: Color32::from_hex("#202020").unwrap(),
-                    stroke: Stroke::new(1.0, Color32::from_gray(100)),
+                    stroke,
                     shadow: Shadow::NONE,
                     ..Default::default()
                 })

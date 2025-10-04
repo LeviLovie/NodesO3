@@ -1,5 +1,6 @@
 - title: "Const"
   desc: "Outputs a constant value."
+  end: false
   category: "Math"
   fields:
     - name: "value"
@@ -16,6 +17,7 @@
 - title: "Add"
   desc: "Adds two values of the same type."
   category: "Math"
+  end: false
   fields:
   inputs:
     - name: "A"
@@ -35,6 +37,7 @@
 
 - title: "Print"
   desc: "Prints the input value to the console."
+  end: true
   category: "Debug"
   fields:
   inputs:

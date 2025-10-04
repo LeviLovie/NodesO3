@@ -2,12 +2,12 @@ use serde::{Deserialize, Serialize};
 
 use super::{Type, Var};
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum FieldKind {
     Enter,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FieldDesc {
     pub name: String,
     #[serde(rename = "type")]
