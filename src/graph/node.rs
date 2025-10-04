@@ -1,6 +1,8 @@
 use iced::{Point, Size};
 use serde::{Deserialize, Serialize};
 
+use crate::graph::FieldDesc;
+
 use super::PortDesc;
 
 pub struct Node {
@@ -14,6 +16,7 @@ pub struct Node {
 pub struct NodeDesc {
     pub title: String,
     pub category: String,
+    pub fields: Vec<FieldDesc>,
     pub inputs: Vec<PortDesc>,
     pub outputs: Vec<PortDesc>,
     pub py_impl: String,

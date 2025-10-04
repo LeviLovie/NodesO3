@@ -1,32 +1,39 @@
 - title: "Const i32"
   category: "Math"
+  fields:
+    - name: "value"
+      type: !Int
+      value: !Int 0
+      kind: !Enter
   inputs:
   outputs:
-    - name: "value"
-      data_type: int
+    - name: "const"
+      type: !Int
       default: !Int 0
-  py_impl: "{out} = {i_value}"
+  py_impl: "{o_const} = {f_value}"
 
 - title: "Add i32"
   category: "Math"
+  fields:
   inputs:
     - name: "A"
-      data_type: int
+      type: !Int
       default: !Int 0
     - name: "B"
-      data_type: int
+      type: !Int
       default: !Int 0
   outputs:
-    - name: "Result"
-      data_type: int
+    - name: "result"
+      type: !Int
       default: !Int 0
-  py_impl: "{out} = {i_A} + {i_B}"
+  py_impl: "{o_result} = {i_A} + {i_B}"
 
 - title: "Print i23"
   category: "Debug"
+  fields:
   inputs:
     - name: "value"
-      data_type: int
+      type: !Int
       default: !Int 0
   outputs:
   py_impl: "print({i_value})"
