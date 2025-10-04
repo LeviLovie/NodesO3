@@ -37,9 +37,9 @@ impl App {
 
     fn port_position(&self, node_id: usize, port_index: usize, output: bool) -> Pos2 {
         let node = self.nodes.iter().find(|n| n.id == node_id).unwrap();
-        let y = node.pos.y + 30.0 + port_index as f32 * 20.0;
+        let y = node.pos.y + 8.0 + port_index as f32 * 20.0;
         let x = if output {
-            node.pos.x + node.size.x - 6.0
+            node.pos.x + node.size.x + 2.0
         } else {
             node.pos.x - 2.0
         };
@@ -58,10 +58,10 @@ impl App {
         let desc = &self.desc_storage.descs[index];
         let new_node = Node {
             id: self.nodes.len(),
-            pos: self.add_menu.unwrap_or(self.cursor),
+            pos: self.add_menu.unwrap_or(Pos2::new(0.0, 0.0)),
             size: egui::vec2(
                 120.0,
-                30.0 + ((desc.inputs.len() + desc.outputs.len()) as f32) * 20.0,
+                ((desc.inputs.len() + desc.outputs.len()) as f32) * 20.0,
             ),
             desc: desc.clone(),
         };
@@ -100,7 +100,6 @@ impl App {
             egui::Order::Foreground,
             egui::Id::new("ports_layer"),
         ));
-        let input = ctx.input(|i| i.clone());
 
         for node in &self.nodes {
             for i in 0..node.desc.inputs.len() {
@@ -110,54 +109,41 @@ impl App {
             for i in 0..node.desc.outputs.len() {
                 let pos = self.port_position(node.id, i, true);
                 painter_fg.circle_filled(pos, 5.0, Color32::from_rgb(51, 179, 51));
-
-                if ctx.input(|i| i.pointer.any_pressed())
-                    && input.pointer.any_pressed()
-                    && let Some(press_pos) = input.pointer.press_origin()
-                    && press_pos.distance(pos) < 8.0
-                {
-                    self.dragging_connection = Some((node.id, i, press_pos));
-                }
             }
         }
     }
 
     fn field_edit(ui: &mut egui::Ui, field: &mut FieldDesc) {
         match field.kind {
-            FieldKind::Enter => {
-                match (&mut field.value, &mut field.raw_value) {
-                    (Var::Bool(b), _) => {
-                        if ui.checkbox(b, "").clicked() {
-                            *b = !*b;
-                        }
+            FieldKind::Enter => match (&mut field.value, &mut field.raw_value) {
+                (Var::Bool(b), _) => {
+                    if ui.checkbox(b, "").clicked() {
+                        *b = !*b;
                     }
-                    // Var::String(s) => {
-                    //     if ui.text_edit_singleline(&mut text).lost_focus() {
-                    //         *s = text;
-                    //     }
-                    // }
-                    (Var::Int(i), raw) => {
-                        if ui.text_edit_singleline(raw).lost_focus()
-                            && let Ok(new_i) = raw.parse::<i64>()
-                        {
-                            *i = new_i;
-                        }
-                    }
-                    // Var::Float(f) => {
-                    //     if ui.text_edit_singleline(&mut text).lost_focus()
-                    //         && let Ok(new_f) = text.parse::<f64>()
-                    //     {
-                    //         *f = new_f;
-                    //     }
-                    // }
-                    // Var::Custom((_, value)) => {
-                    //     if ui.text_edit_singleline(&mut text).lost_focus() {
-                    //         *value = text;
-                    //     }
-                    // }
-                    _ => {}
                 }
-            }
+                (Var::String(s), _) => {
+                    ui.text_edit_singleline(s);
+                }
+                (Var::Int(i), raw) => {
+                    if ui.text_edit_singleline(raw).lost_focus()
+                        && let Ok(new_i) = raw.parse::<i64>()
+                    {
+                        *i = new_i;
+                    }
+                }
+                (Var::Float(f), raw) => {
+                    if ui.text_edit_singleline(raw).lost_focus()
+                        && let Ok(new_f) = raw.parse::<f64>()
+                    {
+                        *f = new_f;
+                    }
+                }
+                (Var::Custom((_, value)), raw) => {
+                    if ui.text_edit_singleline(raw).lost_focus() {
+                        *value = raw.to_string();
+                    }
+                }
+            },
         }
     }
 
@@ -196,26 +182,15 @@ impl App {
                 egui::Id::new("dragging_connection_layer"),
             ));
             let from_pos = self.port_position(from_node, from_port, true);
-            painter_fg.line_segment(
-                [from_pos, current_pos],
-                Stroke::new(2.0, Color32::from_rgb(109, 148, 197)),
-            );
-            if ctx.input(|i| i.pointer.any_released())
-                && let Some(release_pos) = ctx.input(|i| i.pointer.hover_pos())
-            {
-                for node in &self.nodes {
-                    for (i, _) in node.desc.inputs.iter().enumerate() {
-                        let port_pos = self.port_position(node.id, i, false);
-                        if port_pos.distance(release_pos) < 8.0 {
-                            self.connections.push(Connection {
-                                from: (from_node, from_port),
-                                to: (node.id, i),
-                            });
-                            break;
-                        }
-                    }
-                }
-            }
+
+            // Check if the line will connect
+            let color = if self.mouse_over_port(self.cursor, false).is_some() {
+                Color32::from_rgb(51, 179, 51)
+            } else {
+                Color32::from_rgb(179, 51, 51)
+            };
+
+            painter_fg.line_segment([from_pos, current_pos], Stroke::new(2.0, color));
         }
     }
 
@@ -265,13 +240,38 @@ impl App {
         });
 
         if reset_menu {
-            self.add_menu = None;
             self.add_menu_category = None;
         }
 
         if let Some(i) = add {
             self.add_node(i);
+            self.add_menu = None;
         }
+    }
+
+    fn mouse_over_port(&self, mouse_pos: Pos2, is_output: bool) -> Option<(usize, usize, bool)> {
+        for node in &self.nodes {
+            if is_output {
+                for i in 0..node.desc.outputs.len() {
+                    let port_pos = self.port_position(node.id, i, true);
+                    let vertical_dist = (port_pos.y - mouse_pos.y).abs();
+                    let horizontal_dist = (port_pos.x - mouse_pos.x).abs();
+                    if vertical_dist < 10.0 && horizontal_dist < 30.0 {
+                        return Some((node.id, i, true));
+                    }
+                }
+            } else {
+                for i in 0..node.desc.inputs.len() {
+                    let port_pos = self.port_position(node.id, i, false);
+                    let vertical_dist = (port_pos.y - mouse_pos.y).abs();
+                    let horizontal_dist = (port_pos.x - mouse_pos.x).abs();
+                    if vertical_dist < 10.0 && horizontal_dist < 30.0 {
+                        return Some((node.id, i, false));
+                    }
+                }
+            }
+        }
+        None
     }
 }
 
@@ -283,26 +283,29 @@ impl eframe::App for App {
         if let Some(pos) = input.pointer.hover_pos() {
             self.cursor = pos;
         }
-        if input.key_pressed(egui::Key::A) && input.modifiers.shift {
-            self.add_menu = Some(self.cursor);
-        }
         if let Some((from_node, from_port, _)) = self.dragging_connection {
             self.dragging_connection = Some((from_node, from_port, self.cursor));
         }
-        if ctx.input(|i| i.pointer.any_released())
-            && let Some((from_node, output_index, current_pos)) = self.dragging_connection.take()
+
+        if input.key_pressed(egui::Key::A) && input.modifiers.shift {
+            self.add_menu = Some(self.cursor);
+        }
+
+        if ctx.input(|i| i.pointer.any_pressed())
+            && self.dragging_connection.is_none()
+            && let Some((node_id, port_id, _)) = self.mouse_over_port(self.cursor, true)
         {
-            for node in &self.nodes {
-                for i in 0..node.desc.inputs.len() {
-                    let port_pos = self.port_position(node.id, i, false);
-                    if current_pos.distance(port_pos) < 20.0 {
-                        self.connections.push(Connection {
-                            from: (from_node, output_index),
-                            to: (node.id, i),
-                        });
-                    }
-                }
-            }
+            self.dragging_connection = Some((node_id, port_id, self.cursor));
+        }
+
+        if ctx.input(|i| i.pointer.any_released())
+            && let Some((from_node_id, from_port_id, current_pos)) = self.dragging_connection.take()
+            && let Some((to_node_id, to_port_id, _)) = self.mouse_over_port(current_pos, false)
+        {
+            self.connections.push(Connection {
+                from: (from_node_id, from_port_id),
+                to: (to_node_id, to_port_id),
+            });
             self.verify_connections();
         }
 

@@ -15,6 +15,7 @@ pub struct Node {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct NodeDesc {
     pub title: String,
+    pub desc: String,
     pub category: String,
     pub fields: Vec<FieldDesc>,
     pub inputs: Vec<PortDesc>,
