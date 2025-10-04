@@ -2,11 +2,11 @@ mod graph;
 
 use iced::{
     event,
-    keyboard::key::Code,
+    keyboard::{key::Named, Key},
     widget::canvas::{self, Canvas, Frame, Geometry, Path, Stroke, Text as CanvasText},
     Element, Length, Pixels, Point, Size, Subscription, Task, Theme, Vector,
 };
-use iced_widget::{button, text, Column, Container};
+use iced_widget::{button, core::SmolStr, text, Column, Container};
 
 use graph::{DescStorage, Node};
 
@@ -21,6 +21,7 @@ enum Message {
     Main,
     OpenAddMenu,
     AddNode(usize),
+    DeleteSelectedNode,
     CursorMoved(Point),
     MousePressed,
     MouseReleased,
@@ -39,20 +40,17 @@ impl Message {
                 }
                 _ => Message::Main,
             },
-            iced::Event::Keyboard(key_event) => match key_event {
-                iced::keyboard::Event::KeyPressed {
-                    physical_key,
-                    modifiers,
-                    ..
-                } => {
-                    if physical_key == Code::KeyA && modifiers.shift() {
-                        Message::OpenAddMenu
-                    } else {
-                        Message::Main
+            iced::Event::Keyboard(iced::keyboard::Event::KeyPressed { key, modifiers, .. }) => {
+                match (key, modifiers) {
+                    (Key::Named(Named::Delete), _) | (Key::Named(Named::Backspace), _) => {
+                        Message::DeleteSelectedNode
                     }
+                    (Key::Character(c), m) if c == SmolStr::new_inline("a") && m.shift() => {
+                        Message::OpenAddMenu
+                    }
+                    _ => Message::Main,
                 }
-                _ => Message::Main,
-            },
+            }
             _ => Message::Main,
         }
     }
@@ -88,7 +86,6 @@ impl Default for App {
             connections: vec![],
             dragging: None,
             cursor: Point::ORIGIN,
-
             add_menu: None,
         }
     }
@@ -123,6 +120,15 @@ impl App {
                 };
                 self.nodes.push(new_node);
                 self.add_menu = None;
+                Task::none()
+            }
+            Message::DeleteSelectedNode => {
+                self.nodes.retain(|n| {
+                    !(self.cursor.x >= n.pos.x
+                        && self.cursor.x <= n.pos.x + n.size.width
+                        && self.cursor.y >= n.pos.y
+                        && self.cursor.y <= n.pos.y + n.size.height)
+                });
                 Task::none()
             }
             Message::CursorMoved(p) => {
