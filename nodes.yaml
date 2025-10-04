@@ -30,10 +30,11 @@
     - name: "result"
       type: !Int
       default: !Int 0
-  py_impl: |
-    if type({i_A}) != type({i_B}):
-      panic("{title}#{id}: Type mismatch: {} vs {}".format(type({i_A}), type({i_B})))
-    {o_result} = {i_A} + {i_B}
+  # py_impl: |
+  #   if type({i_A}) != type({i_B}):
+  #     panic("{title}#{id}: Type mismatch: {} vs {}".format(type({i_A}), type({i_B})))
+  #   {o_result} = {i_A} + {i_B}
+  py_impl: "{o_result} = {i_A} + {i_B}"
 
 - title: "Print"
   desc: "Prints the input value to the console."

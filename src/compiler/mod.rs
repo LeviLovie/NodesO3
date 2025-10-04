@@ -1,12 +1,14 @@
 mod iomap;
 mod node_map;
 mod traversal;
+mod writer;
 
 pub use iomap::IOMap;
 pub use node_map::NodeMap;
 pub use traversal::UpstreamTraversal;
+pub use writer::write;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 
 use crate::graph::{Connection, Node};
 
@@ -21,6 +23,7 @@ pub enum Stage {
     },
     Traversal {
         node_map: NodeMap,
+        io_map: IOMap,
         traversal: UpstreamTraversal,
     },
     Finished(String),
@@ -28,52 +31,59 @@ pub enum Stage {
 
 pub struct Compiler {
     final_node: usize,
+    debug_info: bool,
     stage: Stage,
 }
 
 impl Compiler {
-    pub fn new(nodes: Vec<Node>, conns: Vec<Connection>, final_node: usize) -> Self {
+    pub fn new(
+        debug_info: bool,
+        nodes: Vec<Node>,
+        conns: Vec<Connection>,
+        final_node: usize,
+    ) -> Self {
         let stage = Stage::Raw {
             nodes: nodes.clone(),
             conns: conns.clone(),
         };
-        Self { final_node, stage }
+        Self {
+            final_node,
+            debug_info,
+            stage,
+        }
     }
 
     pub fn step(&mut self) -> Result<()> {
         let result = match &self.stage {
             Stage::Raw { nodes, conns } => {
-                println!("Building maps...");
                 let node_map = NodeMap::new(nodes);
                 let io_map = IOMap::new(conns);
 
                 Ok(Stage::Maps { node_map, io_map })
             }
             Stage::Maps { node_map, io_map } => {
-                println!("Performing upstream traversal...");
                 let mut traversal = UpstreamTraversal::new();
                 traversal.traverse(self.final_node, node_map, io_map);
 
-                println!("Traversal order: {:?}", traversal.execution_order());
                 Ok(Stage::Traversal {
                     node_map: node_map.clone(),
+                    io_map: io_map.clone(),
                     traversal,
                 })
             }
             Stage::Traversal {
                 traversal,
                 node_map,
+                io_map,
             } => {
-                let mut dumped = String::new();
-                for node_id in traversal.execution_order() {
-                    if let Some(node) = node_map.get(*node_id) {
-                        dumped.push_str(&format!("{:#?}\n", node));
-                    } else {
-                        return Err(anyhow!("Node ID {} not found during compilation", node_id));
-                    }
-                }
-
-                Ok(Stage::Finished(dumped))
+                let output = write(
+                    self.debug_info,
+                    node_map.clone(),
+                    io_map.clone(),
+                    traversal.clone(),
+                )
+                .context("Failed to write output")?;
+                Ok(Stage::Finished(output))
             }
             Stage::Finished(_) => Err(anyhow!("Already finished")),
         };
@@ -88,7 +98,8 @@ impl Compiler {
     }
 
     pub fn compile(&mut self) {
-        println!("Starting compilation...");
+        let mut output = String::new();
+
         loop {
             match self.step() {
                 Ok(_) => {}
@@ -96,9 +107,14 @@ impl Compiler {
             }
 
             if let Stage::Finished(r) = &self.stage {
-                println!("Compilation finished:\n{}", r);
+                output = r.clone();
                 break;
             }
         }
+
+        std::fs::write("output.py", output)
+            .context("Failed to write output.py")
+            .unwrap();
+        println!("Wrote output.py");
     }
 }

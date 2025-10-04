@@ -1,6 +1,6 @@
 use anyhow::{Context as AnyhowContext, Result};
 use eframe::egui::{
-    Color32, Context, Frame, Id, LayerId, Order, Pos2, Rect, Shadow, Stroke, TextEdit, Ui, Window,
+    Color32, Context, Frame, Id, LayerId, Order, Pos2, Shadow, Stroke, TextEdit, Ui, Window,
 };
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, rc::Rc};

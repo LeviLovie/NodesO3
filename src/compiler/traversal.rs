@@ -4,6 +4,7 @@ use crate::compiler::{IOMap, NodeMap};
 
 const MAX_TRAVERSAL_ITER: usize = 1000;
 
+#[derive(Clone)]
 pub struct UpstreamTraversal {
     visited: HashSet<usize>,
     traversal: Vec<usize>,

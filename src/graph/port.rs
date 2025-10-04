@@ -4,8 +4,8 @@ use super::{Type, Var};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PortDesc {
-    name: String,
+    pub name: String,
     #[serde(rename = "type")]
-    data_type: Type,
-    default: Var,
+    pub data_type: Type,
+    pub default: Var,
 }

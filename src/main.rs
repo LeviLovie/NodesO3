@@ -18,6 +18,7 @@ struct Shared {
     pub cursor: Pos2,
     pub add_menu: Option<(Pos2, Option<String>)>,
     pub error: Option<String>,
+    pub compile_debug_info: bool,
 }
 
 struct App {
@@ -33,6 +34,7 @@ impl App {
                 cursor: Pos2::ZERO,
                 add_menu: None,
                 error: None,
+                compile_debug_info: false,
             })),
         })
     }
@@ -218,6 +220,11 @@ impl App {
                 });
 
                 ui.menu_button("Compile", |ui| {
+                    ui.checkbox(
+                        &mut self.shared.borrow_mut().compile_debug_info,
+                        "Include debug info",
+                    );
+
                     let final_nodes = self
                         .workspace
                         .as_ref()
@@ -232,6 +239,7 @@ impl App {
                         .clicked()
                     {
                         let mut compiler = Compiler::new(
+                            self.shared.borrow().compile_debug_info,
                             self.workspace.as_ref().unwrap().data.nodes.clone(),
                             self.workspace.as_ref().unwrap().data.connections.clone(),
                             final_nodes[0].id,

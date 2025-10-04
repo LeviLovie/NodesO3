@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+#[derive(Clone)]
 pub struct IOMap {
     io: HashMap<(usize, usize), (usize, usize)>,
 }
