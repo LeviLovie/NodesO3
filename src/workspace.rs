@@ -1,10 +1,12 @@
 use anyhow::{Context as AnyhowContext, Result};
-use eframe::egui::{Color32, Context, Frame, Id, LayerId, Order, Pos2, Shadow, Stroke, Ui, Window};
+use eframe::egui::{
+    Color32, Context, Frame, Id, LayerId, Order, Pos2, Rect, Shadow, Stroke, TextEdit, Ui, Window,
+};
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, rc::Rc};
 
 use crate::{
-    graph::{Connection, DescStorage, FieldDesc, FieldKind, Node, Var},
+    graph::{Connection, DescStorage, FieldDesc, FieldKind, Node, Type, Var},
     Shared,
 };
 
@@ -34,7 +36,32 @@ impl Workspace {
         }
     }
 
-    pub fn load(&mut self, yaml: String) -> Result<()> {
+    pub fn load(shared: Rc<RefCell<Shared>>) -> Result<Self> {
+        let ron = std::fs::read_to_string("workspace.ron")
+            .context("Failed to read workspace.ron. Create a new workspace first.")?;
+        let mut data: WorkspaceData =
+            ron::from_str(&ron).context("Failed to deserialize workspace.ron")?;
+
+        for node in &mut data.nodes {
+            for field in &mut node.desc.fields {
+                field.raw_value = field.value.to_string();
+            }
+        }
+
+        Ok(Self {
+            data,
+            shared,
+            dragging_connection: None,
+        })
+    }
+
+    pub fn save(&self) -> Result<()> {
+        let ron = ron::to_string(&self.data).context("Failed to serialize workspace")?;
+        std::fs::write("workspace.ron", ron).context("Failed to write workspace.ron")?;
+        Ok(())
+    }
+
+    pub fn load_nodes(&mut self, yaml: String) -> Result<()> {
         self.data
             .desc_storage
             .load(yaml)
@@ -44,8 +71,8 @@ impl Workspace {
 
     pub fn update(&mut self, ctx: &Context) {
         self.render_connections(ctx);
-        self.render_nodes(ctx);
         self.render_ports(ctx);
+        self.render_nodes(ctx);
         self.render_dragging_connection(ctx);
     }
 
@@ -63,7 +90,7 @@ impl Workspace {
     }
 
     fn render_ports(&mut self, ctx: &Context) {
-        let painter_fg = ctx.layer_painter(LayerId::new(Order::Foreground, Id::new("ports_layer")));
+        let painter_fg = ctx.layer_painter(LayerId::new(Order::Background, Id::new("ports_layer")));
 
         for node in &self.data.nodes {
             for i in 0..node.desc.inputs.len() {
@@ -79,14 +106,17 @@ impl Workspace {
 
     fn render_nodes(&mut self, ctx: &Context) {
         for node in &mut self.data.nodes {
+            let id = Id::new(format!("{}", node.id));
+            ctx.memory_mut(|mem| mem.data.remove::<Rect>(id));
             Window::new(&node.desc.title)
-                .default_pos(node.pos)
+                .id(id)
+                .fixed_pos(node.pos)
                 .max_width(node.size.1)
                 .resizable(false)
                 .collapsible(false)
                 .movable(self.dragging_connection.is_none())
                 .frame(Frame {
-                    inner_margin: 2.0.into(),
+                    inner_margin: 6.0.into(),
                     corner_radius: 0.into(),
                     fill: Color32::from_hex("#202020").unwrap(),
                     stroke: Stroke::new(1.0, Color32::from_gray(100)),
@@ -96,8 +126,12 @@ impl Workspace {
                 .show(ctx, |ui| {
                     ui.set_min_height(node.size.1);
                     ui.set_min_width(node.size.0);
-                    node.pos.0 = ui.min_rect().min.x;
-                    node.pos.1 = ui.min_rect().min.y;
+                    if node.stabilize_frames < 10 {
+                        node.stabilize_frames += 1;
+                    } else {
+                        node.pos.0 = ui.min_rect().min.x - 7.0;
+                        node.pos.1 = ui.min_rect().min.y - 38.0;
+                    }
 
                     for field in &mut node.desc.fields {
                         Self::field_edit(ui, field);
@@ -128,35 +162,78 @@ impl Workspace {
 
     fn field_edit(ui: &mut Ui, field: &mut FieldDesc) {
         match field.kind {
-            FieldKind::Enter => match (&mut field.value, &mut field.raw_value) {
-                (Var::Bool(b), _) => {
-                    if ui.checkbox(b, "").clicked() {
-                        *b = !*b;
-                    }
-                }
-                (Var::String(s), _) => {
-                    ui.text_edit_singleline(s);
-                }
-                (Var::Int(i), raw) => {
-                    if ui.text_edit_singleline(raw).lost_focus()
-                        && let Ok(new_i) = raw.parse::<i64>()
+            FieldKind::Enter => {
+                if matches!(field.data_type, Type::Bool) {
+                    if ui
+                        .checkbox(&mut field.value.clone().try_into().unwrap(), "")
+                        .on_hover_text(&field.name)
+                        .changed()
                     {
-                        *i = new_i;
+                        let current_value: bool = field.value.clone().try_into().unwrap();
+                        field.value = (!current_value).into();
                     }
+                    return;
                 }
-                (Var::Float(f), raw) => {
-                    if ui.text_edit_singleline(raw).lost_focus()
-                        && let Ok(new_f) = raw.parse::<f64>()
+
+                let response = ui.add(
+                    TextEdit::singleline(&mut field.raw_value)
+                        .hint_text(format!("{}: {}", field.name, field.data_type)),
+                );
+                if response.lost_focus() {
+                    if field.raw_value.is_empty() {
+                        field.value = Var::Int(0);
+                        return;
+                    }
+
+                    let multi = match &field.data_type {
+                        Type::Multi(m) => Some(m),
+                        _ => None,
+                    };
+
+                    #[allow(clippy::collapsible_if)]
+                    if matches!(field.data_type, Type::Float)
+                        || multi.is_some_and(|m| m.contains(&Type::Float))
                     {
-                        *f = new_f;
-                    }
+                        if let Ok(v) = field.raw_value.parse::<f64>() {
+                            field.value = Var::Float(v);
+                            field.raw_value = v.to_string();
+                            return;
+                        }
+                    };
+
+                    #[allow(clippy::collapsible_if)]
+                    if matches!(field.data_type, Type::Int)
+                        || multi.is_some_and(|m| m.contains(&Type::Int))
+                    {
+                        if let Ok(v) = field.raw_value.parse::<i64>() {
+                            field.value = Var::Int(v);
+                            field.raw_value = v.to_string();
+                            return;
+                        }
+                    };
+
+                    #[allow(clippy::collapsible_if)]
+                    if multi.is_some_and(|m| m.contains(&Type::Bool)) {
+                        if let Ok(v) = field.raw_value.parse::<bool>() {
+                            field.value = Var::Bool(v);
+                            field.raw_value = v.to_string();
+                            return;
+                        }
+                    };
+
+                    if matches!(field.data_type, Type::String)
+                        || multi.is_some_and(|m| m.contains(&Type::String))
+                    {
+                        field.value = Var::String(field.raw_value.clone());
+                        return;
+                    };
+
+                    println!(
+                        "Failed to parse value for field '{}' ('{}': {})",
+                        field.name, field.raw_value, field.data_type
+                    );
                 }
-                (Var::Custom((_, value)), raw) => {
-                    if ui.text_edit_singleline(raw).lost_focus() {
-                        *value = raw.to_string();
-                    }
-                }
-            },
+            }
         }
     }
 
@@ -210,6 +287,7 @@ impl Workspace {
                 ((desc.inputs.len() + desc.outputs.len()) as f32) * 20.0,
             ),
             desc: desc.clone(),
+            stabilize_frames: 0,
         });
         self.shared.borrow_mut().add_menu = None;
     }

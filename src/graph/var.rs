@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 pub type CustomType = (String, String); // (type_name, value)
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub enum Type {
     Bool,
     Int,
@@ -85,9 +85,29 @@ impl From<String> for Var {
     }
 }
 
+impl TryInto<String> for Var {
+    type Error = Self;
+    fn try_into(self) -> Result<String, Self> {
+        match self {
+            Var::String(s) => Ok(s),
+            _ => Err(self),
+        }
+    }
+}
+
 impl From<bool> for Var {
     fn from(b: bool) -> Self {
         Var::Bool(b)
+    }
+}
+
+impl TryInto<bool> for Var {
+    type Error = Self;
+    fn try_into(self) -> Result<bool, Self> {
+        match self {
+            Var::Bool(b) => Ok(b),
+            _ => Err(self),
+        }
     }
 }
 
@@ -97,9 +117,29 @@ impl From<i32> for Var {
     }
 }
 
+impl TryInto<i32> for Var {
+    type Error = Self;
+    fn try_into(self) -> Result<i32, Self> {
+        match self {
+            Var::Int(i) => Ok(i as i32),
+            _ => Err(self),
+        }
+    }
+}
+
 impl From<i64> for Var {
     fn from(i: i64) -> Self {
         Var::Int(i)
+    }
+}
+
+impl TryInto<i64> for Var {
+    type Error = Self;
+    fn try_into(self) -> Result<i64, Self> {
+        match self {
+            Var::Int(i) => Ok(i),
+            _ => Err(self),
+        }
     }
 }
 
@@ -109,9 +149,29 @@ impl From<u32> for Var {
     }
 }
 
+impl TryInto<u32> for Var {
+    type Error = Self;
+    fn try_into(self) -> Result<u32, Self> {
+        match self {
+            Var::Int(i) => Ok(i as u32),
+            _ => Err(self),
+        }
+    }
+}
+
 impl From<u64> for Var {
     fn from(i: u64) -> Self {
         Var::Int(i as i64)
+    }
+}
+
+impl TryInto<u64> for Var {
+    type Error = Self;
+    fn try_into(self) -> Result<u64, Self> {
+        match self {
+            Var::Int(i) => Ok(i as u64),
+            _ => Err(self),
+        }
     }
 }
 
@@ -121,9 +181,29 @@ impl From<f32> for Var {
     }
 }
 
+impl TryInto<f32> for Var {
+    type Error = Self;
+    fn try_into(self) -> Result<f32, Self> {
+        match self {
+            Var::Float(f) => Ok(f as f32),
+            _ => Err(self),
+        }
+    }
+}
+
 impl From<f64> for Var {
     fn from(f: f64) -> Self {
         Var::Float(f)
+    }
+}
+
+impl TryInto<f64> for Var {
+    type Error = Self;
+    fn try_into(self) -> Result<f64, Self> {
+        match self {
+            Var::Float(f) => Ok(f),
+            _ => Err(self),
+        }
     }
 }
 

@@ -10,6 +10,8 @@ pub struct Node {
     pub pos: (f32, f32),
     pub size: (f32, f32),
     pub desc: NodeDesc,
+    #[serde(skip)]
+    pub stabilize_frames: usize,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -25,11 +27,11 @@ pub struct NodeDesc {
 
 impl Node {
     pub fn port_pos(&self, port_index: usize, output: bool) -> Pos2 {
-        let y = self.pos.1 + 8.0 + port_index as f32 * 20.0;
+        let y = self.pos.1 + 35.0 + port_index as f32 * 22.0;
         let x = if output {
-            self.pos.0 + self.size.0 + 2.0
+            self.pos.0 + self.size.0 + 14.0
         } else {
-            self.pos.0 - 2.0
+            self.pos.0
         };
         Pos2 { x, y }
     }

@@ -3,13 +3,20 @@
   category: "Math"
   fields:
     - name: "value"
-      type: !Multi [Bool, Int, Float, String]
+      type: !Multi [Int, Float, String]
+      value: !Int 0
+      kind: !Enter
+    - name: "value"
+      type: !Multi [Int, Float, String]
       value: !Int 0
       kind: !Enter
   inputs:
   outputs:
     - name: "const"
-      type: !Multi [Bool, Int, Float, String]
+      type: !Multi [Int, Float, String]
+      default: !Int 0
+    - name: "const"
+      type: !Multi [Int, Float, String]
       default: !Int 0
   py_impl: "{o_const} = {f_value}"
 
