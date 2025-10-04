@@ -1,0 +1,10 @@
+[package]
+name = "NodesO3"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.100"
+iced = "0.13.1"
+iced_graphics = "0.13.0"
+iced_widget = { version = "0.13.4", features = ["canvas"] }
