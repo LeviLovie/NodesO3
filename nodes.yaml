@@ -6,15 +6,8 @@
       type: !Multi [Int, Float, String]
       value: !Int 0
       kind: !Enter
-    - name: "value"
-      type: !Multi [Int, Float, String]
-      value: !Int 0
-      kind: !Enter
   inputs:
   outputs:
-    - name: "const"
-      type: !Multi [Int, Float, String]
-      default: !Int 0
     - name: "const"
       type: !Multi [Int, Float, String]
       default: !Int 0
