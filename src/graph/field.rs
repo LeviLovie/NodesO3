@@ -9,8 +9,11 @@ pub enum FieldKind {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct FieldDesc {
-    name: String,
-    data_type: Type,
-    value: Var,
-    kind: FieldKind,
+    pub name: String,
+    #[serde(rename = "type")]
+    pub data_type: Type,
+    pub value: Var,
+    #[serde(skip)]
+    pub raw_value: String,
+    pub kind: FieldKind,
 }

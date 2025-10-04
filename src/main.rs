@@ -1,358 +1,332 @@
 mod graph;
 
-use iced::{
-    event,
-    keyboard::{key::Named, Key},
-    widget::canvas::{self, Canvas, Frame, Geometry, Path, Stroke, Text as CanvasText},
-    Element, Length, Pixels, Point, Size, Subscription, Task, Theme, Vector,
-};
-use iced_widget::{button, core::SmolStr, text, Column, Container};
+use anyhow::{anyhow, Context as AnyhowContext, Result};
+use eframe::egui::{self, CentralPanel, Color32, Context, Pos2, Stroke, Window};
 
-use graph::{DescStorage, Node};
-
-pub fn main() -> iced::Result {
-    iced::application(App::title, App::update, App::view)
-        .subscription(App::subscription)
-        .run()
-}
-
-#[derive(Debug, Clone)]
-enum Message {
-    Main,
-    OpenAddMenu,
-    AddNode(usize),
-    DeleteSelectedNode,
-    CursorMoved(Point),
-    MousePressed,
-    MouseReleased,
-}
-
-impl Message {
-    fn from_event(event: iced::Event) -> Message {
-        match event {
-            iced::Event::Mouse(mouse_event) => match mouse_event {
-                iced::mouse::Event::CursorMoved { position } => Message::CursorMoved(position),
-                iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left) => {
-                    Message::MousePressed
-                }
-                iced::mouse::Event::ButtonReleased(iced::mouse::Button::Left) => {
-                    Message::MouseReleased
-                }
-                _ => Message::Main,
-            },
-            iced::Event::Keyboard(iced::keyboard::Event::KeyPressed { key, modifiers, .. }) => {
-                match (key, modifiers) {
-                    (Key::Named(Named::Delete), _) | (Key::Named(Named::Backspace), _) => {
-                        Message::DeleteSelectedNode
-                    }
-                    (Key::Character(c), m) if c == SmolStr::new_inline("a") && m.shift() => {
-                        Message::OpenAddMenu
-                    }
-                    _ => Message::Main,
-                }
-            }
-            _ => Message::Main,
-        }
-    }
-}
+use graph::{DescStorage, FieldDesc, FieldKind, Node, Var};
 
 struct Connection {
     from: (usize, usize),
     to: (usize, usize),
 }
 
-enum Dragging {
-    Node { node_id: usize, offset: Vector },
-    Connection { node_id: usize, port_id: usize },
-}
-
 struct App {
     nodes: Vec<Node>,
     desc_storage: DescStorage,
     connections: Vec<Connection>,
-    dragging: Option<Dragging>,
-    cursor: Point,
-
-    add_menu: Option<Point>,
-}
-
-impl Default for App {
-    fn default() -> Self {
-        let yaml = std::fs::read_to_string("nodes.yaml").unwrap_or_default();
-        let desc_storage = DescStorage::from(yaml).expect("Failed to load node descriptions");
-        Self {
-            nodes: vec![],
-            desc_storage,
-            connections: vec![],
-            dragging: None,
-            cursor: Point::ORIGIN,
-            add_menu: None,
-        }
-    }
+    cursor: Pos2,
+    add_menu: Option<Pos2>,
+    add_menu_category: Option<String>,
+    dragging_connection: Option<(usize, usize, Pos2)>, // (node_id, port_index, current_pos)>,
 }
 
 impl App {
-    pub fn title(&self) -> String {
-        "Node Graph".into()
+    fn new() -> Result<Self> {
+        let yaml = std::fs::read_to_string("nodes.yaml").context("Failed to read nodes.yaml")?;
+        let desc_storage = DescStorage::from(yaml).context("Failed to load node descriptions")?;
+        Ok(Self {
+            nodes: vec![],
+            desc_storage,
+            connections: vec![],
+            cursor: Pos2::ZERO,
+            add_menu: None,
+            add_menu_category: None,
+            dragging_connection: None,
+        })
     }
 
-    pub fn subscription(&self) -> Subscription<Message> {
-        event::listen().map(Message::from_event)
-    }
-
-    pub fn update(&mut self, msg: Message) -> Task<Message> {
-        match msg {
-            Message::Main => Task::none(),
-            Message::OpenAddMenu => {
-                self.add_menu = Some(self.cursor);
-                Task::none()
-            }
-            Message::AddNode(index) => {
-                let desc = &self.desc_storage.descs[index];
-                let new_node = Node {
-                    id: self.nodes.len(),
-                    pos: self.add_menu.unwrap_or(self.cursor),
-                    size: Size::new(
-                        120.0,
-                        30.0 + ((desc.inputs.len() + desc.outputs.len()) as f32) * 20.0,
-                    ),
-                    desc: desc.clone(),
-                };
-                self.nodes.push(new_node);
-                self.add_menu = None;
-                Task::none()
-            }
-            Message::DeleteSelectedNode => {
-                self.nodes.retain(|n| {
-                    !(self.cursor.x >= n.pos.x
-                        && self.cursor.x <= n.pos.x + n.size.width
-                        && self.cursor.y >= n.pos.y
-                        && self.cursor.y <= n.pos.y + n.size.height)
-                });
-                Task::none()
-            }
-            Message::CursorMoved(p) => {
-                self.cursor = p;
-                match &mut self.dragging {
-                    Some(Dragging::Node { node_id, offset }) => {
-                        if let Some(node) = self.nodes.iter_mut().find(|n| n.id == *node_id) {
-                            let new_pos = p - *offset;
-                            node.pos = Point::new(new_pos.x.max(0.0), new_pos.y.max(0.0));
-                        }
-                    }
-                    Some(Dragging::Connection { .. }) => {}
-                    None => {}
-                }
-                Task::none()
-            }
-            Message::MousePressed => {
-                for node in &self.nodes {
-                    let cursor_pos = self.cursor;
-                    if cursor_pos.x >= node.pos.x
-                        && cursor_pos.x <= node.pos.x + node.size.width
-                        && cursor_pos.y >= node.pos.y
-                        && cursor_pos.y <= node.pos.y + 20.0
-                    {
-                        self.dragging = Some(Dragging::Node {
-                            node_id: node.id,
-                            offset: self.cursor - node.pos,
-                        });
-                    }
-
-                    for i in 0..node.desc.outputs.len() {
-                        let port_pos = self.port_position(node.id, i, true);
-                        let diff = port_pos - self.cursor;
-                        let distance = (diff.x.powi(2) + diff.y.powi(2)).sqrt();
-                        if distance < 10.0 {
-                            self.dragging = Some(Dragging::Connection {
-                                node_id: node.id,
-                                port_id: i,
-                            });
-                            return Task::none();
-                        }
-                    }
-                }
-
-                Task::none()
-            }
-            Message::MouseReleased => {
-                match self.dragging.take() {
-                    Some(Dragging::Connection { node_id, port_id }) => {
-                        for node in &self.nodes {
-                            for i in 0..node.desc.inputs.len() {
-                                let port_pos = self.port_position(node.id, i, false);
-                                let diff = port_pos - self.cursor;
-                                let distance = (diff.x.powi(2) + diff.y.powi(2)).sqrt();
-                                if distance < 10.0 {
-                                    self.connections
-                                        .retain(|conn| !(conn.to.0 == node.id && conn.to.1 == i));
-                                    self.connections.push(Connection {
-                                        from: (node_id, port_id),
-                                        to: (node.id, i),
-                                    });
-                                    self.verify_connections();
-                                    return Task::none();
-                                }
-                            }
-                        }
-                    }
-                    Some(Dragging::Node { .. }) => {}
-                    None => {}
-                }
-                self.dragging = None;
-                Task::none()
-            }
-        }
-    }
-
-    pub fn view(&self) -> Element<'_, Message> {
-        let canvas = Canvas::new(NodeGraph { app: self })
-            .width(Length::Fill)
-            .height(Length::Fill);
-
-        if let Some(_menu_pos) = self.add_menu {
-            let mut menu_column = Column::new().spacing(2);
-            for (i, desc) in self.desc_storage.descs.iter().enumerate() {
-                let btn = button(text(&desc.title)).on_press(Message::AddNode(i));
-                menu_column = menu_column.push(btn);
-            }
-
-            let menu = Container::new(menu_column)
-                .width(Length::Fixed(200.0))
-                .padding(5);
-
-            iced::widget::Stack::new()
-                .push(canvas)
-                .push(menu) // menu will be on top
-                .into()
+    fn port_position(&self, node_id: usize, port_index: usize, output: bool) -> Pos2 {
+        let node = self.nodes.iter().find(|n| n.id == node_id).unwrap();
+        let y = node.pos.y + 30.0 + port_index as f32 * 20.0;
+        let x = if output {
+            node.pos.x + node.size.x - 6.0
         } else {
-            canvas.into()
-        }
+            node.pos.x - 2.0
+        };
+        Pos2 { x, y }
     }
 
     fn verify_connections(&mut self) {
         self.connections.retain(|conn| {
             let from_exists = self.nodes.iter().any(|n| n.id == conn.from.0);
             let to_exists = self.nodes.iter().any(|n| n.id == conn.to.0);
-            from_exists && to_exists
+            from_exists && to_exists && conn.from.0 != conn.to.0
         });
-        self.connections.retain(|conn| conn.from.0 != conn.to.0);
     }
 
-    fn port_position(&self, node_id: usize, port_index: usize, output: bool) -> Point {
-        let node = self.nodes.iter().find(|n| n.id == node_id).unwrap();
-        let y = node.pos.y + 30.0 + port_index as f32 * 20.0;
-        let x = if output {
-            node.pos.x + 120.0
-        } else {
-            node.pos.x
+    fn add_node(&mut self, index: usize) {
+        let desc = &self.desc_storage.descs[index];
+        let new_node = Node {
+            id: self.nodes.len(),
+            pos: self.add_menu.unwrap_or(self.cursor),
+            size: egui::vec2(
+                120.0,
+                30.0 + ((desc.inputs.len() + desc.outputs.len()) as f32) * 20.0,
+            ),
+            desc: desc.clone(),
         };
-        Point::new(x, y)
+        self.nodes.push(new_node);
+        self.add_menu = None;
     }
-}
 
-struct NodeGraph<'a> {
-    app: &'a App,
-}
+    fn set_style(ctx: &Context) {
+        let mut visuals = egui::Visuals::dark();
+        visuals.override_text_color = Some(egui::Color32::WHITE);
+        ctx.set_visuals(visuals);
 
-impl<'a> NodeGraph<'a> {
-    fn draw_connection(&self, frame: &mut Frame, from: Point, to: Point) {
-        let path = Path::line(from, to);
-
-        frame.stroke(
-            &path,
-            Stroke::default()
-                .with_color(iced::Color::parse("#6D94C5").unwrap())
-                .with_width(2.0),
+        let mut style = (*ctx.style()).clone();
+        style.text_styles.insert(
+            egui::TextStyle::Heading,
+            egui::FontId::new(12.0, egui::FontFamily::Proportional),
         );
+        ctx.set_style(style);
     }
 
-    fn draw_node(&self, frame: &mut Frame, node: &Node) {
-        // Node background
-        let rect = Path::rectangle(node.pos, node.size);
-        frame.fill(&rect, iced::Color::from_rgb(0.2, 0.2, 0.3));
-        frame.stroke(
-            &rect,
-            Stroke::default().with_color(iced::Color::parse("#19183B").unwrap()),
-        );
+    fn render_connections(&self, ctx: &Context) {
+        let painter_bg = ctx.layer_painter(egui::LayerId::background());
 
-        // Title bar
-        let title_bar = Path::rectangle(node.pos, iced::Size::new(node.size.width, 20.0));
-        frame.fill(&title_bar, iced::Color::from_rgb(0.1, 0.1, 0.2));
-
-        // Inputs
-        for i in 0..node.desc.inputs.len() {
-            let p = self.app.port_position(node.id, i, false);
-            let circle = Path::circle(p, 5.0);
-            frame.fill(&circle, iced::Color::from_rgb(0.7, 0.2, 0.2));
-        }
-
-        // Outputs
-        for i in 0..node.desc.outputs.len() {
-            let p = self.app.port_position(node.id, i, true);
-            let circle = Path::circle(p, 5.0);
-            frame.fill(&circle, iced::Color::from_rgb(0.2, 0.7, 0.2));
-        }
-
-        // Title text
-        let title_pos = Point::new(node.pos.x + 2.0, node.pos.y);
-        frame.fill_text(CanvasText {
-            content: node.desc.title.clone(),
-            position: title_pos,
-            color: iced::Color::WHITE,
-            size: Pixels(16.0),
-            ..Default::default()
-        });
-    }
-}
-
-impl<'a> canvas::Program<Message> for NodeGraph<'a> {
-    type State = ();
-
-    fn draw(
-        &self,
-        _state: &Self::State,
-        renderer: &iced::Renderer,
-        _theme: &Theme,
-        bounds: iced::Rectangle,
-        _curson: iced::mouse::Cursor,
-    ) -> Vec<Geometry> {
-        let mut frame = Frame::new(renderer, bounds.size());
-
-        for node in &self.app.nodes {
-            self.draw_node(&mut frame, node);
-        }
-
-        for conn in &self.app.connections {
-            self.draw_connection(
-                &mut frame,
-                self.app.port_position(conn.from.0, conn.from.1, true),
-                self.app.port_position(conn.to.0, conn.to.1, false),
+        for conn in &self.connections {
+            let from = self.port_position(conn.from.0, conn.from.1, true);
+            let to = self.port_position(conn.to.0, conn.to.1, false);
+            painter_bg.line_segment(
+                [from, to],
+                Stroke::new(2.0, Color32::from_rgb(109, 148, 197)),
             );
         }
+    }
 
-        match &self.app.dragging {
-            Some(Dragging::Node { node_id, .. }) => {
-                if let Some(node) = self.app.nodes.iter().find(|n| n.id == *node_id) {
-                    let highlight = Path::rectangle(node.pos, node.size);
-                    frame.stroke(
-                        &highlight,
-                        Stroke::default()
-                            .with_color(iced::Color::parse("#FFD700").unwrap())
-                            .with_width(3.0),
-                    );
+    fn render_ports(&mut self, ctx: &Context) {
+        let painter_fg = ctx.layer_painter(egui::LayerId::new(
+            egui::Order::Foreground,
+            egui::Id::new("ports_layer"),
+        ));
+        let input = ctx.input(|i| i.clone());
+
+        for node in &self.nodes {
+            for i in 0..node.desc.inputs.len() {
+                let pos = self.port_position(node.id, i, false);
+                painter_fg.circle_filled(pos, 5.0, Color32::from_rgb(179, 51, 51));
+            }
+            for i in 0..node.desc.outputs.len() {
+                let pos = self.port_position(node.id, i, true);
+                painter_fg.circle_filled(pos, 5.0, Color32::from_rgb(51, 179, 51));
+
+                if ctx.input(|i| i.pointer.any_pressed())
+                    && input.pointer.any_pressed()
+                    && let Some(press_pos) = input.pointer.press_origin()
+                    && press_pos.distance(pos) < 8.0
+                {
+                    self.dragging_connection = Some((node.id, i, press_pos));
                 }
             }
-            Some(Dragging::Connection { node_id, port_id }) => {
-                self.draw_connection(
-                    &mut frame,
-                    self.app.port_position(*node_id, *port_id, true),
-                    self.app.cursor,
-                );
+        }
+    }
+
+    fn field_edit(ui: &mut egui::Ui, field: &mut FieldDesc) {
+        match field.kind {
+            FieldKind::Enter => {
+                match (&mut field.value, &mut field.raw_value) {
+                    (Var::Bool(b), _) => {
+                        if ui.checkbox(b, "").clicked() {
+                            *b = !*b;
+                        }
+                    }
+                    // Var::String(s) => {
+                    //     if ui.text_edit_singleline(&mut text).lost_focus() {
+                    //         *s = text;
+                    //     }
+                    // }
+                    (Var::Int(i), raw) => {
+                        if ui.text_edit_singleline(raw).lost_focus()
+                            && let Ok(new_i) = raw.parse::<i64>()
+                        {
+                            *i = new_i;
+                        }
+                    }
+                    // Var::Float(f) => {
+                    //     if ui.text_edit_singleline(&mut text).lost_focus()
+                    //         && let Ok(new_f) = text.parse::<f64>()
+                    //     {
+                    //         *f = new_f;
+                    //     }
+                    // }
+                    // Var::Custom((_, value)) => {
+                    //     if ui.text_edit_singleline(&mut text).lost_focus() {
+                    //         *value = text;
+                    //     }
+                    // }
+                    _ => {}
+                }
             }
-            _ => {}
+        }
+    }
+
+    fn render_nodes(&mut self, ctx: &Context) {
+        for node in &mut self.nodes {
+            Window::new(&node.desc.title)
+                .default_pos(node.pos)
+                .max_width(node.size.x)
+                .resizable(false)
+                .collapsible(false)
+                .movable(self.dragging_connection.is_none())
+                .frame(egui::Frame {
+                    inner_margin: 2.0.into(),
+                    corner_radius: 0.into(),
+                    fill: egui::Color32::from_hex("#202020").unwrap(),
+                    stroke: egui::Stroke::new(1.0, egui::Color32::from_gray(100)),
+                    shadow: egui::epaint::Shadow::NONE,
+                    ..Default::default()
+                })
+                .show(ctx, |ui| {
+                    ui.set_min_height(node.size.y);
+                    ui.set_min_width(node.size.x);
+                    node.pos = ui.min_rect().min;
+
+                    for field in &mut node.desc.fields {
+                        Self::field_edit(ui, field);
+                    }
+                });
+        }
+    }
+
+    fn render_dragging_connection(&mut self, ctx: &Context) {
+        if let Some((from_node, from_port, current_pos)) = self.dragging_connection {
+            let painter_fg = ctx.layer_painter(egui::LayerId::new(
+                egui::Order::Foreground,
+                egui::Id::new("dragging_connection_layer"),
+            ));
+            let from_pos = self.port_position(from_node, from_port, true);
+            painter_fg.line_segment(
+                [from_pos, current_pos],
+                Stroke::new(2.0, Color32::from_rgb(109, 148, 197)),
+            );
+            if ctx.input(|i| i.pointer.any_released())
+                && let Some(release_pos) = ctx.input(|i| i.pointer.hover_pos())
+            {
+                for node in &self.nodes {
+                    for (i, _) in node.desc.inputs.iter().enumerate() {
+                        let port_pos = self.port_position(node.id, i, false);
+                        if port_pos.distance(release_pos) < 8.0 {
+                            self.connections.push(Connection {
+                                from: (from_node, from_port),
+                                to: (node.id, i),
+                            });
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn render_add_node(&mut self, ctx: &Context) {
+        if self.add_menu.is_none() {
+            return;
         }
 
-        vec![frame.into_geometry()]
+        let mut reset_menu = false;
+        let mut add: Option<usize> = None;
+
+        Window::new(format!(
+            "Add {}",
+            self.add_menu_category.clone().unwrap_or("Node".to_string())
+        ))
+        .fixed_pos(self.add_menu.unwrap())
+        .collapsible(false)
+        .title_bar(true)
+        .resizable(false)
+        .frame(egui::Frame {
+            inner_margin: 4.0.into(),
+            corner_radius: 0.into(),
+            fill: egui::Color32::from_hex("#202020").unwrap(),
+            stroke: egui::Stroke::new(1.0, egui::Color32::from_gray(100)),
+            shadow: egui::epaint::Shadow::NONE,
+            ..Default::default()
+        })
+        .show(ctx, |ui| {
+            if let Some(category) = &self.add_menu_category {
+                if ui.button("Back").clicked() {
+                    reset_menu = true;
+                }
+
+                for (i, desc) in self.desc_storage.descs.iter().enumerate() {
+                    if desc.category == *category && ui.button(&desc.title).clicked() {
+                        add = Some(i);
+                        reset_menu = true;
+                    }
+                }
+            } else {
+                for category in &self.desc_storage.categories {
+                    if ui.button(category).clicked() {
+                        self.add_menu_category = Some(category.clone());
+                    }
+                }
+            }
+        });
+
+        if reset_menu {
+            self.add_menu = None;
+            self.add_menu_category = None;
+        }
+
+        if let Some(i) = add {
+            self.add_node(i);
+        }
     }
+}
+
+impl eframe::App for App {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        App::set_style(ctx);
+
+        let input = ctx.input(|i| i.clone());
+        if let Some(pos) = input.pointer.hover_pos() {
+            self.cursor = pos;
+        }
+        if input.key_pressed(egui::Key::A) && input.modifiers.shift {
+            self.add_menu = Some(self.cursor);
+        }
+        if let Some((from_node, from_port, _)) = self.dragging_connection {
+            self.dragging_connection = Some((from_node, from_port, self.cursor));
+        }
+        if ctx.input(|i| i.pointer.any_released())
+            && let Some((from_node, output_index, current_pos)) = self.dragging_connection.take()
+        {
+            for node in &self.nodes {
+                for i in 0..node.desc.inputs.len() {
+                    let port_pos = self.port_position(node.id, i, false);
+                    if current_pos.distance(port_pos) < 20.0 {
+                        self.connections.push(Connection {
+                            from: (from_node, output_index),
+                            to: (node.id, i),
+                        });
+                    }
+                }
+            }
+            self.verify_connections();
+        }
+
+        CentralPanel::default().show(ctx, |_| {});
+
+        self.render_connections(ctx);
+        self.render_nodes(ctx);
+        self.render_ports(ctx);
+        self.render_dragging_connection(ctx);
+        self.render_add_node(ctx);
+
+        ctx.request_repaint();
+    }
+}
+
+fn main() -> Result<()> {
+    let app = App::new().context("Creating app")?;
+    let options = eframe::NativeOptions::default();
+    eframe::run_native(
+        "Node Graph",
+        options,
+        Box::new(|_cc| Ok(Box::new(app) as Box<dyn eframe::App>)),
+    )
+    .map_err(|e| anyhow!(format!("{e:?}")))
+    .context("Running eframe")?;
+    Ok(())
 }

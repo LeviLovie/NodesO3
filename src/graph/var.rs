@@ -4,15 +4,12 @@ pub type CustomType = (String, String); // (type_name, value)
 
 #[derive(Serialize, Deserialize, Clone)]
 pub enum Type {
-    #[serde(alias = "bool")]
     Bool,
-    #[serde(alias = "int")]
     Int,
-    #[serde(alias = "float")]
     Float,
-    #[serde(alias = "string")]
     String,
     Custom(String),
+    Multi(Vec<Type>),
 }
 
 impl std::fmt::Display for Type {
@@ -23,6 +20,10 @@ impl std::fmt::Display for Type {
             Type::Float => write!(f, "Float"),
             Type::String => write!(f, "String"),
             Type::Custom(s) => write!(f, "Custom({})", s),
+            Type::Multi(types) => {
+                let types_str: Vec<String> = types.iter().map(|t| t.to_string()).collect();
+                write!(f, "[{}]", types_str.join(", "))
+            }
         }
     }
 }
@@ -155,7 +156,7 @@ impl PartialEq for Var {
 
 #[cfg(test)]
 mod test {
-    use super::{CustomType, Var};
+    use super::{CustomType, Type, Var};
 
     #[test]
     fn test_str() {
@@ -324,5 +325,15 @@ mod test {
         assert_ne!(Var::from(custom1.clone()), Var::from(custom3));
         assert_ne!(Var::from(custom1), Var::from(custom4));
         assert_ne!(Var::from(("Point", "(1, 2)")), Var::from(0));
+    }
+
+    #[test]
+    fn test_multi() {
+        let multi_type = Type::Multi(vec![
+            Type::Int,
+            Type::String,
+            Type::Custom("Point".to_string()),
+        ]);
+        assert_eq!(multi_type.to_string(), "[Int, String, Custom(Point)]");
     }
 }

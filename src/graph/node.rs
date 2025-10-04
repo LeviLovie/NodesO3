@@ -1,4 +1,4 @@
-use iced::{Point, Size};
+use eframe::egui::{Pos2, Vec2};
 use serde::{Deserialize, Serialize};
 
 use crate::graph::FieldDesc;
@@ -7,8 +7,8 @@ use super::PortDesc;
 
 pub struct Node {
     pub id: usize,
-    pub pos: Point,
-    pub size: Size,
+    pub pos: Pos2,
+    pub size: Vec2,
     pub desc: NodeDesc,
 }
 

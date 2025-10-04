@@ -1,39 +1,42 @@
-- title: "Const i32"
+- title: "Const"
   category: "Math"
   fields:
     - name: "value"
-      type: !Int
+      type: !Multi [Bool, Int, Float, String]
       value: !Int 0
       kind: !Enter
   inputs:
   outputs:
     - name: "const"
-      type: !Int
+      type: !Multi [Bool, Int, Float, String]
       default: !Int 0
   py_impl: "{o_const} = {f_value}"
 
-- title: "Add i32"
+- title: "Add"
   category: "Math"
   fields:
   inputs:
     - name: "A"
-      type: !Int
+      type: !Multi [Bool, Int, Float, String]
       default: !Int 0
     - name: "B"
-      type: !Int
+      type: !Multi [Bool, Int, Float, String]
       default: !Int 0
   outputs:
     - name: "result"
       type: !Int
       default: !Int 0
-  py_impl: "{o_result} = {i_A} + {i_B}"
+  py_impl: |
+    if type({i_A}) != type({i_B}):
+      panic("{title}#{id}: Type mismatch: {} vs {}".format(type({i_A}), type({i_B})))
+    {o_result} = {i_A} + {i_B}
 
-- title: "Print i23"
+- title: "Print"
   category: "Debug"
   fields:
   inputs:
     - name: "value"
-      type: !Int
+      type: !Multi [Bool, Int, Float, String]
       default: !Int 0
   outputs:
   py_impl: "print({i_value})"
