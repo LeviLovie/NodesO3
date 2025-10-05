@@ -1,3 +1,4 @@
+mod compiler;
 mod graph;
 mod workspace;
 
@@ -5,10 +6,11 @@ use std::{cell::RefCell, rc::Rc};
 
 use anyhow::{anyhow, Context as AnyhowContext, Result};
 use eframe::egui::{
-    self, Align, CentralPanel, Context, Grid, Layout, MenuBar, Pos2, RichText, TopBottomPanel,
-    Window,
+    self, Align, Button, CentralPanel, Context, Grid, Layout, MenuBar, Pos2, RichText,
+    TopBottomPanel, Window,
 };
 
+use compiler::Compiler;
 use graph::Connection;
 use workspace::Workspace;
 
@@ -16,6 +18,7 @@ struct Shared {
     pub cursor: Pos2,
     pub add_menu: Option<(Pos2, Option<String>)>,
     pub error: Option<String>,
+    pub compile_debug_info: bool,
 }
 
 struct App {
@@ -31,6 +34,7 @@ impl App {
                 cursor: Pos2::ZERO,
                 add_menu: None,
                 error: None,
+                compile_debug_info: false,
             })),
         })
     }
@@ -215,6 +219,64 @@ impl App {
                     });
                 });
 
+                ui.menu_button("Descs", |ui| {
+                    Grid::new("Descs").show(ui, |ui| {
+                        if ui.button("Clear").clicked() {
+                            self.workspace
+                                .as_mut()
+                                .unwrap()
+                                .data
+                                .desc_storage
+                                .descs
+                                .clear();
+                            ui.close();
+                        }
+                        ui.end_row();
+
+                        if ui.button("Reload").clicked() {
+                            self.load_nodes();
+                            ui.close();
+                        }
+                        ui.end_row();
+
+                        if ui.button("Re-attach").clicked() {
+                            self.workspace.as_mut().unwrap().reattach();
+                            ui.close();
+                        }
+                        ui.end_row();
+                    });
+                });
+
+                ui.menu_button("Compile", |ui| {
+                    ui.checkbox(
+                        &mut self.shared.borrow_mut().compile_debug_info,
+                        "Include debug info",
+                    );
+
+                    let final_nodes = self
+                        .workspace
+                        .as_ref()
+                        .unwrap()
+                        .data
+                        .nodes
+                        .iter()
+                        .filter(|n| n.desc.end)
+                        .collect::<Vec<_>>();
+                    if ui
+                        .add_enabled(final_nodes.len() == 1, Button::new("Compile"))
+                        .clicked()
+                    {
+                        let mut compiler = Compiler::new(
+                            self.shared.borrow().compile_debug_info,
+                            self.workspace.as_ref().unwrap().data.nodes.clone(),
+                            self.workspace.as_ref().unwrap().data.connections.clone(),
+                            final_nodes[0].id,
+                        );
+                        compiler.compile();
+                        ui.close();
+                    }
+                });
+
                 ui.menu_button("Help", |ui| {
                     if ui.button("About").clicked() {
                         ui.close();
@@ -254,14 +316,49 @@ impl eframe::App for App {
                     .unwrap()
                     .dragging_connection
                     .is_none()
-                && let Some((node_id, port_id, _)) = self
+            {
+                if let Some((node_id, port_id, _)) = self
                     .workspace
                     .as_mut()
                     .unwrap()
                     .mouse_over_port(self.shared.borrow().cursor, true)
-            {
-                self.workspace.as_mut().unwrap().dragging_connection =
-                    Some((node_id, port_id, self.shared.borrow().cursor));
+                {
+                    self.workspace.as_mut().unwrap().dragging_connection =
+                        Some((node_id, port_id, self.shared.borrow().cursor));
+                }
+
+                if let Some((node_id, port_id, _)) = self
+                    .workspace
+                    .as_mut()
+                    .unwrap()
+                    .mouse_over_port(self.shared.borrow().cursor, false)
+                    && self
+                        .workspace
+                        .as_mut()
+                        .unwrap()
+                        .data
+                        .connections
+                        .iter()
+                        .any(|c| c.to.0 == node_id && c.to.1 == port_id)
+                    && let Some((from_node, from_port)) = self
+                        .workspace
+                        .as_ref()
+                        .unwrap()
+                        .data
+                        .connections
+                        .iter()
+                        .find(|c| c.to.0 == node_id && c.to.1 == port_id)
+                        .map(|c| c.from)
+                {
+                    self.workspace
+                        .as_mut()
+                        .unwrap()
+                        .data
+                        .connections
+                        .retain(|c| !(c.to.0 == node_id && c.to.1 == port_id));
+                    self.workspace.as_mut().unwrap().dragging_connection =
+                        Some((from_node, from_port, self.shared.borrow().cursor));
+                }
             }
 
             if ctx.input(|i| i.pointer.any_released())

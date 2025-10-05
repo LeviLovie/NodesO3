@@ -1,6 +1,6 @@
 use anyhow::{Context as AnyhowContext, Result};
 use eframe::egui::{
-    Color32, Context, Frame, Id, LayerId, Order, Pos2, Rect, Shadow, Stroke, TextEdit, Ui, Window,
+    Color32, Context, Frame, Id, LayerId, Order, Pos2, Shadow, Stroke, TextEdit, Ui, Window,
 };
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, rc::Rc};
@@ -76,6 +76,19 @@ impl Workspace {
         self.render_dragging_connection(ctx);
     }
 
+    pub fn reattach(&mut self) {
+        for node in &mut self.data.nodes {
+            node.desc = self
+                .data
+                .desc_storage
+                .descs
+                .iter()
+                .find(|d| d.title == node.desc.title)
+                .unwrap()
+                .clone();
+        }
+    }
+
     fn render_connections(&self, ctx: &Context) {
         let painter_bg = ctx.layer_painter(LayerId::background());
 
@@ -107,8 +120,12 @@ impl Workspace {
     fn render_nodes(&mut self, ctx: &Context) {
         for node in &mut self.data.nodes {
             let id = Id::new(format!("{}", node.id));
-            ctx.memory_mut(|mem| mem.data.remove::<Rect>(id));
-            Window::new(&node.desc.title)
+            let stroke = if node.desc.end {
+                Stroke::new(1.0, Color32::from_hex("#C0C000").unwrap())
+            } else {
+                Stroke::new(1.0, Color32::from_gray(100))
+            };
+            Window::new(format!("{}#{}", node.desc.title, node.id))
                 .id(id)
                 .fixed_pos(node.pos)
                 .max_width(node.size.1)
@@ -119,7 +136,7 @@ impl Workspace {
                     inner_margin: 6.0.into(),
                     corner_radius: 0.into(),
                     fill: Color32::from_hex("#202020").unwrap(),
-                    stroke: Stroke::new(1.0, Color32::from_gray(100)),
+                    stroke,
                     shadow: Shadow::NONE,
                     ..Default::default()
                 })

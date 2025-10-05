@@ -12,6 +12,22 @@ pub enum Type {
     Multi(Vec<Type>),
 }
 
+impl std::fmt::Debug for Type {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Type::Bool => write!(f, "Bool"),
+            Type::Int => write!(f, "Int"),
+            Type::Float => write!(f, "Float"),
+            Type::String => write!(f, "String"),
+            Type::Custom(s) => write!(f, "Custom({})", s),
+            Type::Multi(types) => {
+                let types_str: Vec<String> = types.iter().map(|t| format!("{:?}", t)).collect();
+                write!(f, "Multi([{}])", types_str.join(", "))
+            }
+        }
+    }
+}
+
 impl std::fmt::Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
