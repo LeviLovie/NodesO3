@@ -1,15 +1,17 @@
 mod iomap;
 mod node_map;
 mod traversal;
+mod type_map;
 mod writer;
 
 pub use iomap::IOMap;
 pub use node_map::NodeMap;
-use tracing::{debug, info};
 pub use traversal::UpstreamTraversal;
+pub use type_map::TypeMap;
 pub use writer::write;
 
 use anyhow::{anyhow, Context, Result};
+use tracing::{debug, info};
 
 use crate::graph::{Connection, Node};
 

@@ -32,9 +32,7 @@ nodes:
         default: !Int 0
     outputs:
       - name: "result"
-        type: !Multi [Int, Float]
-        default: !Int 0
-        # type: !Inherit ti_A
+        type: !Inherit ti_A
     impls:
       - lang: "python3"
         required: ["panic"]

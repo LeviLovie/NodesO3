@@ -65,15 +65,15 @@ impl Workspace {
     pub fn load_nodes(&mut self) -> Result<()> {
         self.data
             .desc_storage
-            .import("std/math.yaml".into(), false)
+            .import("std/math.yaml".into(), true)
             .context("Failed to load node descriptions")?;
         self.data
             .desc_storage
-            .import("std/string.yaml".into(), false)
+            .import("std/string.yaml".into(), true)
             .context("Failed to load node descriptions")?;
         self.data
             .desc_storage
-            .import("std/debug.yaml".into(), false)
+            .import("std/debug.yaml".into(), true)
             .context("Failed to load node descriptions")?;
         Ok(())
     }

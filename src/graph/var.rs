@@ -10,6 +10,7 @@ pub enum Type {
     String,
     Custom(String),
     Multi(Vec<Type>),
+    Inherit(String), // Special to be used in output of nodes
 }
 
 impl std::fmt::Debug for Type {
@@ -24,6 +25,7 @@ impl std::fmt::Debug for Type {
                 let types_str: Vec<String> = types.iter().map(|t| format!("{:?}", t)).collect();
                 write!(f, "Multi([{}])", types_str.join(", "))
             }
+            Type::Inherit(s) => write!(f, "Inherit({})", s),
         }
     }
 }
@@ -40,6 +42,7 @@ impl std::fmt::Display for Type {
                 let types_str: Vec<String> = types.iter().map(|t| t.to_string()).collect();
                 write!(f, "[{}]", types_str.join(", "))
             }
+            Type::Inherit(s) => write!(f, "Inherit({})", s),
         }
     }
 }
