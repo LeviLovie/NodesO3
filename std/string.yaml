@@ -1,0 +1,20 @@
+category: "String"
+lib: "Std"
+nodes:
+  - title: "String"
+    desc: "Output a string constant."
+    end: false
+    fields:
+      - name: "value"
+        type: !String
+        value: !String ""
+        kind: !Enter
+    inputs:
+    outputs:
+      - name: "const"
+        # type: !Inherit fi_value
+        type: !String
+        default: !String ""
+    impls:
+      - lang: "python3"
+        code: "{o_const} = {f_value}"

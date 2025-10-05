@@ -1,14 +1,17 @@
 mod iomap;
 mod node_map;
 mod traversal;
+mod type_map;
 mod writer;
 
 pub use iomap::IOMap;
 pub use node_map::NodeMap;
 pub use traversal::UpstreamTraversal;
+pub use type_map::TypeMap;
 pub use writer::write;
 
 use anyhow::{anyhow, Context, Result};
+use tracing::{debug, info};
 
 use crate::graph::{Connection, Node};
 
@@ -27,6 +30,17 @@ pub enum Stage {
         traversal: UpstreamTraversal,
     },
     Finished(String),
+}
+
+impl std::fmt::Display for Stage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Stage::Raw { .. } => write!(f, "Raw"),
+            Stage::Maps { .. } => write!(f, "Maps"),
+            Stage::Traversal { .. } => write!(f, "Traversal"),
+            Stage::Finished(_) => write!(f, "Finished"),
+        }
+    }
 }
 
 pub struct Compiler {
@@ -97,24 +111,29 @@ impl Compiler {
         }
     }
 
+    #[tracing::instrument(skip_all)]
     pub fn compile(&mut self) {
+        debug!("Starting compilation");
         let mut output = String::new();
 
         loop {
+            debug!(stage = ?self.stage.to_string(), "Execution compile stage");
             match self.step() {
                 Ok(_) => {}
                 Err(_) => break,
             }
 
             if let Stage::Finished(r) = &self.stage {
+                info!("Compilation finished");
                 output = r.clone();
                 break;
             }
         }
 
+        debug!(len = ?output.len(), file = ?"output.py", "Writing compiled code");
         std::fs::write("output.py", output)
             .context("Failed to write output.py")
             .unwrap();
-        println!("Wrote output.py");
+        info!(file = ?"output.py", "Wrote compiled code successfully");
     }
 }

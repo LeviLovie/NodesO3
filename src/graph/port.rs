@@ -7,5 +7,5 @@ pub struct PortDesc {
     pub name: String,
     #[serde(rename = "type")]
     pub data_type: Type,
-    pub default: Var,
+    pub default: Option<Var>,
 }

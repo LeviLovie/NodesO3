@@ -4,6 +4,7 @@ use eframe::egui::{
 };
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, rc::Rc};
+use tracing::error;
 
 use crate::{
     graph::{Connection, DescStorage, FieldDesc, FieldKind, Node, Type, Var},
@@ -61,10 +62,18 @@ impl Workspace {
         Ok(())
     }
 
-    pub fn load_nodes(&mut self, yaml: String) -> Result<()> {
+    pub fn load_nodes(&mut self) -> Result<()> {
         self.data
             .desc_storage
-            .load(yaml)
+            .import("std/math.yaml".into(), true)
+            .context("Failed to load node descriptions")?;
+        self.data
+            .desc_storage
+            .import("std/string.yaml".into(), true)
+            .context("Failed to load node descriptions")?;
+        self.data
+            .desc_storage
+            .import("std/debug.yaml".into(), true)
             .context("Failed to load node descriptions")?;
         Ok(())
     }
@@ -74,19 +83,6 @@ impl Workspace {
         self.render_ports(ctx);
         self.render_nodes(ctx);
         self.render_dragging_connection(ctx);
-    }
-
-    pub fn reattach(&mut self) {
-        for node in &mut self.data.nodes {
-            node.desc = self
-                .data
-                .desc_storage
-                .descs
-                .iter()
-                .find(|d| d.title == node.desc.title)
-                .unwrap()
-                .clone();
-        }
     }
 
     fn render_connections(&self, ctx: &Context) {
@@ -294,18 +290,21 @@ impl Workspace {
         None
     }
 
-    pub fn add_node(&mut self, index: usize) {
-        let desc = &self.data.desc_storage.descs[index];
-        self.data.nodes.push(Node {
-            id: self.data.nodes.len(),
-            pos: self.shared.borrow().add_menu.clone().unwrap().0.into(),
-            size: (
-                120.0,
-                ((desc.inputs.len() + desc.outputs.len()) as f32) * 20.0,
-            ),
-            desc: desc.clone(),
-            stabilize_frames: 0,
-        });
-        self.shared.borrow_mut().add_menu = None;
+    pub fn add_node(&mut self, category: String, title: String) {
+        if let Some(desc) = self.data.desc_storage.desc(&category, &title) {
+            self.data.nodes.push(Node {
+                id: self.data.nodes.len(),
+                pos: self.shared.borrow().add_menu.clone().unwrap().0.into(),
+                size: (
+                    120.0,
+                    ((desc.inputs.len() + desc.outputs.len()) as f32) * 20.0,
+                ),
+                desc: desc.clone(),
+                stabilize_frames: 0,
+            });
+            self.shared.borrow_mut().add_menu = None;
+        } else {
+            error!("Node description not found for {}:{}", category, title);
+        }
     }
 }
