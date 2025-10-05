@@ -3,7 +3,7 @@ use eframe::egui::{
     Color32, Context, Frame, Id, LayerId, Order, Pos2, Shadow, Stroke, TextEdit, Ui, Window,
 };
 use serde::{Deserialize, Serialize};
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, path::PathBuf, rc::Rc};
 use tracing::error;
 
 use crate::{
@@ -37,11 +37,18 @@ impl Workspace {
         }
     }
 
-    pub fn load(shared: Rc<RefCell<Shared>>) -> Result<Self> {
-        let ron = std::fs::read_to_string("workspace.ron")
-            .context("Failed to read workspace.ron. Create a new workspace first.")?;
+    #[tracing::instrument(skip(shared))]
+    pub fn load(shared: Rc<RefCell<Shared>>, path: PathBuf, compressed: bool) -> Result<Self> {
+        let mut ron = std::fs::read(path).context("Failed to read workspace.")?;
+        if compressed {
+            ron = Self::decompress(&ron)
+                .context("Failed to decompress workspace")?
+                .as_bytes()
+                .to_vec();
+        }
+        let string_ron = String::from_utf8(ron).context("Failed to convert workspace to string")?;
         let mut data: WorkspaceData =
-            ron::from_str(&ron).context("Failed to deserialize workspace.ron")?;
+            ron::from_str(&string_ron).context("Failed to deserialize workspace")?;
 
         for node in &mut data.nodes {
             for field in &mut node.desc.fields {
@@ -56,26 +63,27 @@ impl Workspace {
         })
     }
 
-    pub fn save(&self) -> Result<()> {
+    #[tracing::instrument(skip(self))]
+    pub fn save(&self, path: PathBuf, compress: bool) -> Result<()> {
         let ron = ron::to_string(&self.data).context("Failed to serialize workspace")?;
-        std::fs::write("workspace.ron", ron).context("Failed to write workspace.ron")?;
+        if compress {
+            let compressed_data = Self::compress(ron).context("Failed to compress workspace")?;
+            std::fs::write(path, compressed_data).context("Failed to write workspace.ron")?;
+        } else {
+            std::fs::write(path, ron).context("Failed to write workspace.ron")?;
+        }
         Ok(())
     }
 
-    pub fn load_nodes(&mut self) -> Result<()> {
-        self.data
-            .desc_storage
-            .import("std/math.yaml".into(), true)
-            .context("Failed to load node descriptions")?;
-        self.data
-            .desc_storage
-            .import("std/string.yaml".into(), true)
-            .context("Failed to load node descriptions")?;
-        self.data
-            .desc_storage
-            .import("std/debug.yaml".into(), true)
-            .context("Failed to load node descriptions")?;
-        Ok(())
+    fn compress(file_data: String) -> Result<Vec<u8>> {
+        zstd::encode_all(file_data.as_bytes(), 0).context("Failed to compress data using zstd")
+    }
+
+    fn decompress(compressed_data: &[u8]) -> Result<String> {
+        String::from_utf8(
+            zstd::decode_all(compressed_data).context("Failed to decompress data using zstd")?,
+        )
+        .context("Failed to convert decompressed data to string")
     }
 
     pub fn update(&mut self, ctx: &Context) {

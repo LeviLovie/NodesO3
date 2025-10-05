@@ -6,6 +6,12 @@ use tracing::{debug, info, warn};
 
 use super::NodeDesc;
 
+const STD_LIBS: &[&[u8]] = &[
+    include_bytes!("../../std/math.no3lib.yaml"),
+    include_bytes!("../../std/string.no3lib.yaml"),
+    include_bytes!("../../std/debug.no3lib.yaml"),
+];
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct DescLib {
     pub category: String,
@@ -50,11 +56,24 @@ impl DescStorage {
         self.libs.iter().any(|lib| lib.category == category)
     }
 
-    #[tracing::instrument(skip_all)]
-    pub fn import(&mut self, yaml_path: PathBuf, upgrade: bool) -> Result<()> {
-        debug!(?yaml_path, "Importing desc lib");
+    pub fn import_std_libs(&mut self) -> Result<()> {
+        for lib_bytes in STD_LIBS {
+            self.import(String::from_utf8_lossy(lib_bytes).to_string(), true)?;
+        }
+        Ok(())
+    }
+
+    pub fn load_import(&mut self, yaml_path: PathBuf, upgrade: bool) -> Result<()> {
+        debug!(?yaml_path, "Loading desc lib");
         let yaml =
             std::fs::read_to_string(&yaml_path).context("Failed to read desc lib YAML file")?;
+        self.import(yaml, upgrade)?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip_all)]
+    pub fn import(&mut self, yaml: String, upgrade: bool) -> Result<()> {
         let lib: DescLib =
             serde_yaml_ng::from_str(&yaml).context("Failed to parse desc lib from YAML")?;
         debug!(category=%lib.category, lib=%lib.lib, desc_count=%lib.descs.len(), "Parsed desc lib");

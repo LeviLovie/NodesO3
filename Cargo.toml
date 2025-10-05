@@ -6,9 +6,11 @@ edition = "2024"
 [dependencies]
 anyhow = "1.0.100"
 eframe = "0.32.3"
+egui-file-dialog = "0.11.0"
 iced_graphics = "0.13.0"
 ron = { version = "0.11.0", features = ["indexmap"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_yaml_ng = "0.10.0"
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
+zstd = "0.13.3"

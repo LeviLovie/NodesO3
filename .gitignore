@@ -1,4 +1,5 @@
 /target
 
-workspace.ron
-workspace.ron.bak
+*.no3
+*.no3zstd
+output.py

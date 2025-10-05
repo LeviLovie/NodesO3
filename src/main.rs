@@ -1,4 +1,5 @@
 mod compiler;
+mod file_picker;
 mod graph;
 mod workspace;
 
@@ -9,10 +10,11 @@ use eframe::egui::{
     self, Align, Button, CentralPanel, Context, Grid, Layout, MenuBar, Pos2, RichText,
     TopBottomPanel, Window,
 };
+use tracing::{error, info};
 
 use compiler::Compiler;
+use file_picker::{DialogPurpose, FilePicker};
 use graph::Connection;
-use tracing::error;
 use workspace::Workspace;
 
 struct Shared {
@@ -25,6 +27,7 @@ struct Shared {
 struct App {
     workspace: Option<Workspace>,
     shared: Rc<RefCell<Shared>>,
+    picker: Option<FilePicker>,
 }
 
 impl App {
@@ -37,33 +40,14 @@ impl App {
                 error: None,
                 compile_debug_info: false,
             })),
+            picker: None,
         })
     }
 
     fn new_workspace(&mut self) -> Result<()> {
         let workspace = Workspace::new(self.shared.clone());
         self.workspace = Some(workspace);
-        self.load_nodes();
         Ok(())
-    }
-
-    fn load_nodes_result(&mut self) -> Result<()> {
-        if self.workspace.is_none() {
-            return Err(anyhow!("Workspace is None in load_nodes_result"));
-        }
-        self.workspace
-            .as_mut()
-            .unwrap()
-            .load_nodes()
-            .context("Failed to load nodes")?;
-        Ok(())
-    }
-
-    fn load_nodes(&mut self) {
-        if let Err(e) = self.load_nodes_result() {
-            error!("Failed to load nodes: {e:?}");
-            self.shared.borrow_mut().error = Some(format!("Failed to load nodes: {e:?}"));
-        }
     }
 
     fn set_style(ctx: &Context) {
@@ -102,6 +86,7 @@ impl App {
         .fixed_pos(add_menu.0)
         .collapsible(false)
         .title_bar(true)
+        .movable(true)
         .resizable(false)
         .frame(egui::Frame {
             inner_margin: 4.0.into(),
@@ -113,9 +98,13 @@ impl App {
         })
         .show(ctx, |ui| {
             if let Some(category) = add_menu.clone().1 {
+                if ui.button("Close").clicked() {
+                    self.shared.borrow_mut().add_menu = None;
+                }
                 if ui.button("Back").clicked() {
                     reset_menu = true;
                 }
+                ui.add_space(8.0);
 
                 if let Some(descs) = self
                     .workspace
@@ -133,6 +122,11 @@ impl App {
                     }
                 }
             } else {
+                if ui.button("Close").clicked() {
+                    self.shared.borrow_mut().add_menu = None;
+                }
+                ui.add_space(8.0);
+
                 for category in &self
                     .workspace
                     .as_ref()
@@ -174,33 +168,17 @@ impl App {
                         ui.end_row();
 
                         if ui.button("Open").clicked() {
-                            match Workspace::load(self.shared.clone()) {
-                                Ok(ws) => {
-                                    self.workspace = Some(ws);
-                                }
-                                Err(e) => {
-                                    self.shared.borrow_mut().error =
-                                        Some(format!("Failed to open workspace: {e:?}"))
-                                }
-                            }
-                            self.load_nodes();
+                            self.picker = Some(FilePicker::new(DialogPurpose::OpenWorkspace));
                             ui.close();
                         }
                         ui.label("Shift+O");
                         ui.end_row();
 
                         if ui.button("Save").clicked() {
-                            if self.workspace.is_none() {
-                                self.shared.borrow_mut().error =
-                                    Some("No workspace to save.".to_string());
-                                ui.close();
-                                return;
+                            if self.workspace.is_some() {
+                                self.picker = Some(FilePicker::new(DialogPurpose::SaveWorkspace));
                             }
 
-                            if let Err(e) = self.workspace.as_ref().unwrap().save() {
-                                self.shared.borrow_mut().error =
-                                    Some(format!("Failed to open workspace: {e:?}"))
-                            }
                             ui.close();
                         }
                         ui.label("Shift+S");
@@ -210,6 +188,28 @@ impl App {
 
                 ui.menu_button("Nodes", |ui| {
                     Grid::new("Nodes").show(ui, |ui| {
+                        if ui.button("Import Libs").clicked() {
+                            self.picker = Some(FilePicker::new(DialogPurpose::ImportLibs));
+                            ui.close();
+                        }
+                        ui.end_row();
+
+                        if ui.button("Import Std Libs").clicked() {
+                            self.workspace
+                                .as_mut()
+                                .unwrap()
+                                .data
+                                .desc_storage
+                                .import_std_libs()
+                                .unwrap_or_else(|e| {
+                                    error!("Failed to import std libs: {e:?}");
+                                    self.shared.borrow_mut().error =
+                                        Some(format!("Failed to import std libs: {e:?}"))
+                                });
+                            ui.close();
+                        }
+                        ui.end_row();
+
                         if ui.button("Add").clicked() {
                             self.shared.borrow_mut().add_menu =
                                 Some((Pos2::new(100.0, 100.0), None));
@@ -267,6 +267,77 @@ impl eframe::App for App {
         let input = ctx.input(|i| i.clone());
         if let Some(pos) = input.pointer.hover_pos() {
             self.shared.borrow_mut().cursor = pos;
+        }
+
+        if let Some(picker) = &mut self.picker {
+            picker.show(ctx);
+            if let Some(path) = &picker.picked_path {
+                match picker.purpose {
+                    DialogPurpose::OpenWorkspace => {
+                        info!(?path, "Opening workspace");
+                        let compressed = path
+                            .extension()
+                            .map(|ext| ext == "no3zstd")
+                            .unwrap_or(false);
+                        match Workspace::load(self.shared.clone(), path.clone(), compressed) {
+                            Ok(ws) => {
+                                self.workspace = Some(ws);
+                            }
+                            Err(e) => {
+                                error!("Failed to open workspace: {e:?}");
+                                self.shared.borrow_mut().error =
+                                    Some(format!("Failed to open workspace: {e:?}"))
+                            }
+                        }
+                    }
+                    DialogPurpose::SaveWorkspace => {
+                        info!(?path, "Saving workspace");
+                        let compress = path
+                            .extension()
+                            .map(|ext| ext == "no3zstd")
+                            .unwrap_or(false);
+                        if self.workspace.is_none() {
+                            error!("No workspace to save.");
+                            self.shared.borrow_mut().error =
+                                Some("No workspace to save.".to_string());
+                        } else if let Err(e) = self
+                            .workspace
+                            .as_ref()
+                            .unwrap()
+                            .save(path.clone(), compress)
+                        {
+                            error!("Failed to save workspace: {e:?}");
+                            self.shared.borrow_mut().error =
+                                Some(format!("Failed to save workspace: {e:?}"));
+                        }
+                    }
+                    DialogPurpose::ImportLibs => {
+                        let paths = &picker.picked_paths;
+                        info!(
+                            count = paths.as_ref().map(|p| p.len()).unwrap_or(0),
+                            "Importing libs"
+                        );
+                        for path in paths.as_ref().unwrap_or(&vec![]) {
+                            info!(?path, "Importing lib");
+                            if self.workspace.is_none() {
+                                self.shared.borrow_mut().error =
+                                    Some("No workspace to import lib into.".to_string());
+                            } else if let Err(e) = self
+                                .workspace
+                                .as_mut()
+                                .unwrap()
+                                .data
+                                .desc_storage
+                                .load_import(path.to_path_buf(), true)
+                            {
+                                self.shared.borrow_mut().error =
+                                    Some(format!("Failed to import lib: {e:?}"));
+                            }
+                        }
+                    }
+                }
+                self.picker = None;
+            }
         }
 
         if self.workspace.is_some() {
@@ -374,16 +445,7 @@ impl eframe::App for App {
                             Some(format!("Failed to create new workspace: {e:?}"));
                     }
                     if ui.button("Open Workspace").clicked() {
-                        match Workspace::load(self.shared.clone()) {
-                            Ok(ws) => {
-                                self.workspace = Some(ws);
-                            }
-                            Err(e) => {
-                                self.shared.borrow_mut().error =
-                                    Some(format!("Failed to open workspace: {e:?}"))
-                            }
-                        }
-                        self.load_nodes();
+                        self.picker = Some(FilePicker::new(DialogPurpose::OpenWorkspace));
                     }
                 });
             });
