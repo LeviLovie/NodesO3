@@ -1,0 +1,15 @@
+category: "Debug"
+crate: "Std"
+nodes:
+  - title: "Print"
+    desc: "Prints the input value to the console."
+    end: true
+    fields:
+    inputs:
+      - name: "value"
+        type: !Multi [Bool, Int, Float, String]
+        default: !Int 0
+    outputs:
+    impls:
+      - lang: "python3"
+        code: "print({i_value})"

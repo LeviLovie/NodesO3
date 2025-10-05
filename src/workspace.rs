@@ -78,6 +78,12 @@ impl Workspace {
 
     pub fn reattach(&mut self) {
         for node in &mut self.data.nodes {
+            let fields: Vec<(String, Var)> = node
+                .desc
+                .fields
+                .iter()
+                .map(|f| (f.name.clone(), f.value.clone()))
+                .collect();
             node.desc = self
                 .data
                 .desc_storage
@@ -86,6 +92,12 @@ impl Workspace {
                 .find(|d| d.title == node.desc.title)
                 .unwrap()
                 .clone();
+            for field in &mut node.desc.fields {
+                if let Some((_, value)) = fields.iter().find(|(n, _)| n == &field.name) {
+                    field.value = value.clone();
+                    field.raw_value = value.to_string();
+                }
+            }
         }
     }
 

@@ -1,0 +1,44 @@
+category: "Math"
+crate: "Std"
+nodes:
+  - title: "Const"
+    desc: "Outputs a constant value."
+    end: false
+    fields:
+      - name: "value"
+        type: !Multi [Int, Float]
+        value: !Int 0
+        kind: !Enter
+    inputs:
+    outputs:
+      - name: "const"
+        type: !Multi [Int, Float]
+        default: !Int 0
+        # type: !Inherit fi_value
+    impls:
+      - lang: "python3"
+        code: "{o_const} = {f_value}"
+
+  - title: "Add"
+    desc: "Adds two values of the same type."
+    end: false
+    fields:
+    inputs:
+      - name: "A"
+        type: !Multi [Int, Float]
+        default: !Int 0
+      - name: "B"
+        type: !Multi [Int, Float]
+        default: !Int 0
+    outputs:
+      - name: "result"
+        type: !Multi [Int, Float]
+        default: !Int 0
+        # type: !Inherit ti_A
+    impls:
+      - lang: "python3"
+        required: ["panic"]
+        type_check: |
+          if "{ti_A}" != "{ti_B}":
+            panic("{title}#{id}: Type mismatch: {ti_A} vs {ti_B}")
+        code: "{o_result} = {i_A} + {i_B}"
