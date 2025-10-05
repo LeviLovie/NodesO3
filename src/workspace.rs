@@ -1,4 +1,4 @@
-use anyhow::{Context as AnyhowContext, Result};
+use anyhow::{bail, Context as AnyhowContext, Result};
 use eframe::egui::{
     Color32, Context, Frame, Id, LayerId, Order, Pos2, Shadow, Stroke, TextEdit, Ui, Window,
 };
@@ -7,15 +7,18 @@ use std::{cell::RefCell, path::PathBuf, rc::Rc};
 use tracing::error;
 
 use crate::{
+    compiler::Compilation,
     graph::{Connection, DescStorage, FieldDesc, FieldKind, Node, Type, Var},
     Shared,
 };
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct WorkspaceData {
+    pub version: String,
     pub nodes: Vec<Node>,
     pub desc_storage: DescStorage,
     pub connections: Vec<Connection>,
+    pub compilation: Option<Compilation>,
 }
 
 pub struct Workspace {
@@ -28,9 +31,11 @@ impl Workspace {
     pub fn new(shared: Rc<RefCell<Shared>>) -> Self {
         Self {
             data: WorkspaceData {
+                version: env!("CARGO_PKG_VERSION").to_string(),
                 nodes: Vec::new(),
                 desc_storage: DescStorage::new(),
                 connections: Vec::new(),
+                compilation: None,
             },
             shared,
             dragging_connection: None,
@@ -49,6 +54,19 @@ impl Workspace {
         let string_ron = String::from_utf8(ron).context("Failed to convert workspace to string")?;
         let mut data: WorkspaceData =
             ron::from_str(&string_ron).context("Failed to deserialize workspace")?;
+
+        if data.version != env!("CARGO_PKG_VERSION") {
+            error!(
+                "Workspace version ({}) does not match application version ({}).",
+                data.version,
+                env!("CARGO_PKG_VERSION")
+            );
+            bail!(
+                "Workspace version ({}) does not match application version ({}).",
+                data.version,
+                env!("CARGO_PKG_VERSION")
+            );
+        }
 
         for node in &mut data.nodes {
             for field in &mut node.desc.fields {
@@ -91,6 +109,13 @@ impl Workspace {
         self.render_ports(ctx);
         self.render_nodes(ctx);
         self.render_dragging_connection(ctx);
+        self.render_compilation(ctx);
+    }
+
+    fn render_compilation(&mut self, ctx: &Context) {
+        if let Some(compilation) = &mut self.data.compilation {
+            compilation.update(ctx);
+        }
     }
 
     fn render_connections(&self, ctx: &Context) {

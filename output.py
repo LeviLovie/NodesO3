@@ -3,12 +3,12 @@
 def panic(msg: str) -> None:
     raise RuntimeError(f"PANIC: {msg}")
 
-output_1_0 = 5.5
-output_4_0 = 5.5
+output_3_0 = 5.5
+output_4_0 = 6.5
 if "[Int, Float]" != "[Int, Float]":
-  panic("Add#3: Type mismatch: [Int, Float] vs [Int, Float]")
-output_3_0 = output_1_0 + output_4_0
+  panic("Add#2: Type mismatch: [Int, Float] vs [Int, Float]")
+output_2_0 = output_3_0 + output_4_0
 if "[Int, Float]" != "[Int, Float]":
-  panic("Add#0: Type mismatch: [Int, Float] vs [Int, Float]")
-output_0_0 = output_1_0 + output_3_0
-print(output_0_0)
+  panic("Add#1: Type mismatch: [Int, Float] vs [Int, Float]")
+output_1_0 = output_3_0 + output_2_0
+print(output_1_0)

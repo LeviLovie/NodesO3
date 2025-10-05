@@ -245,7 +245,17 @@ impl App {
                             self.workspace.as_ref().unwrap().data.connections.clone(),
                             final_nodes[0].id,
                         );
-                        compiler.compile();
+                        match compiler.compile() {
+                            Ok(compilation) => {
+                                self.workspace.as_mut().unwrap().data.compilation =
+                                    Some(compilation);
+                            }
+                            Err(e) => {
+                                error!("Compilation failed: {e:?}");
+                                self.shared.borrow_mut().error =
+                                    Some(format!("Compilation failed: {e:?}"));
+                            }
+                        }
                         ui.close();
                     }
                 });
@@ -335,6 +345,7 @@ impl eframe::App for App {
                             }
                         }
                     }
+                    _ => {}
                 }
                 self.picker = None;
             }

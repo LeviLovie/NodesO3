@@ -12,4 +12,4 @@ nodes:
     outputs:
     impls:
       - lang: "python3"
-        code: "print({i_value})"
+        code: "print(str({i_value}))"

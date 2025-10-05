@@ -1,9 +1,11 @@
+mod compilation;
 mod iomap;
 mod node_map;
 mod traversal;
 mod type_map;
 mod writer;
 
+pub use compilation::Compilation;
 pub use iomap::IOMap;
 pub use node_map::NodeMap;
 pub use traversal::UpstreamTraversal;
@@ -47,6 +49,7 @@ pub struct Compiler {
     final_node: usize,
     debug_info: bool,
     stage: Stage,
+    compilation: Compilation,
 }
 
 impl Compiler {
@@ -64,6 +67,7 @@ impl Compiler {
             final_node,
             debug_info,
             stage,
+            compilation: Compilation::new(),
         }
     }
 
@@ -112,28 +116,24 @@ impl Compiler {
     }
 
     #[tracing::instrument(skip_all)]
-    pub fn compile(&mut self) {
+    pub fn compile(&mut self) -> Result<Compilation> {
         debug!("Starting compilation");
-        let mut output = String::new();
 
         loop {
             debug!(stage = ?self.stage.to_string(), "Execution compile stage");
-            match self.step() {
-                Ok(_) => {}
-                Err(_) => break,
-            }
+            let start = std::time::Instant::now();
+
+            self.step().context("Compilation step failed")?;
+
+            let duration = start.elapsed();
+            self.compilation
+                .add_elapsed_time(&self.stage.to_string(), duration);
 
             if let Stage::Finished(r) = &self.stage {
                 info!("Compilation finished");
-                output = r.clone();
-                break;
+                self.compilation.set_code(r.clone());
+                return Ok(self.compilation.clone());
             }
         }
-
-        debug!(len = ?output.len(), file = ?"output.py", "Writing compiled code");
-        std::fs::write("output.py", output)
-            .context("Failed to write output.py")
-            .unwrap();
-        info!(file = ?"output.py", "Wrote compiled code successfully");
     }
 }

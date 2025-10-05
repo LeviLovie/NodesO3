@@ -7,8 +7,10 @@ pub enum DialogPurpose {
     OpenWorkspace,
     SaveWorkspace,
     ImportLibs,
+    SavePython,
 }
 
+#[derive(Debug)]
 pub struct FilePicker {
     dlg: Option<FileDialog>,
     activated: bool,
@@ -38,14 +40,17 @@ impl FilePicker {
                 dlg_config.title = Some("Import a Library".to_string());
                 dlg_config.default_file_filter = Some("NodesO₃ Libraries".to_string());
             }
+            DialogPurpose::SavePython => {
+                dlg_config = dlg_config.add_save_extension("Python", "py");
+                dlg_config.default_save_extension = Some("py".to_string());
+                dlg_config.title = Some("Save to a Python File".to_string());
+            }
         }
         *dlg.config_mut() = dlg_config;
 
         match purpose {
             DialogPurpose::OpenWorkspace => {
-                dlg = dlg.add_file_filter_extensions("NodesO₃ Workspaces", vec!["no3"]);
-                dlg = dlg
-                    .add_file_filter_extensions("NodesO₃ Compressed Workspaces", vec!["no3zstd"]);
+                dlg = dlg.add_file_filter_extensions("NodesO₃ Workspaces", vec!["no3", "no3zstd"]);
             }
             DialogPurpose::ImportLibs => {
                 dlg = dlg.add_file_filter(
@@ -76,6 +81,7 @@ impl FilePicker {
                     DialogPurpose::OpenWorkspace => dlg.pick_file(),
                     DialogPurpose::SaveWorkspace => dlg.save_file(),
                     DialogPurpose::ImportLibs => dlg.pick_multiple(),
+                    DialogPurpose::SavePython => dlg.save_file(),
                 };
             }
 

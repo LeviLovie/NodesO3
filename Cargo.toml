@@ -3,12 +3,18 @@ name = "NodesO3"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+rustpython = ["dep:rustpython"]
+
 [dependencies]
 anyhow = "1.0.100"
+chrono = { version = "0.4.42", features = ["serde"] }
 eframe = "0.32.3"
 egui-file-dialog = "0.11.0"
+egui_code_editor = "0.2.17"
 iced_graphics = "0.13.0"
 ron = { version = "0.11.0", features = ["indexmap"] }
+rustpython = { version = "0.4.0", optional = true }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_yaml_ng = "0.10.0"
 tracing = "0.1.41"
