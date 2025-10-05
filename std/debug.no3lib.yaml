@@ -3,12 +3,13 @@ lib: "Std"
 nodes:
   - title: "Print"
     desc: "Prints the input value to the console."
-    end: true
+    exec_kind: !In
     fields:
     inputs:
       - name: "value"
         type: !Multi [Bool, Int, Float, String]
         default: !Int 0
+        variant: !Simple
     outputs:
     impls:
       - lang: "python3"

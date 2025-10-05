@@ -151,9 +151,9 @@ fn write_node(
     }
 
     output.push_str(&py_impl);
-    output.push_str("\n");
+    output.push('\n');
     if debug_info {
-        output.push_str("\n");
+        output.push('\n');
     }
 
     Ok(output)

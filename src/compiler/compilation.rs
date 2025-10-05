@@ -23,6 +23,12 @@ pub const AYU_DARK: ColorTheme = ColorTheme {
     special: "#f28779",
 };
 
+impl Default for Compilation {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Compilation {
     pub code: String,

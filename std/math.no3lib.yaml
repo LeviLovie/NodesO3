@@ -3,34 +3,39 @@ lib: "Std"
 nodes:
   - title: "Const"
     desc: "Outputs a constant value."
-    end: false
+    exec_kind: !Out
     fields:
       - name: "value"
         type: !Multi [Int, Float]
         value: !Int 0
         kind: !Enter
+        variant: !Simple
     inputs:
     outputs:
       - name: "const"
         type: !Inherit fi_value
+        variant: !Simple
     impls:
       - lang: "python3"
         code: "{o_const} = {f_value}"
 
   - title: "Add"
     desc: "Adds A to B."
-    end: false
+    exec_kind: !InOut
     fields:
     inputs:
       - name: "A"
         type: !Multi [Int, Float]
         default: !Int 0
+        variant: !Simple
       - name: "B"
         type: !Multi [Int, Float]
         default: !Int 0
+        variant: !Simple
     outputs:
       - name: "result"
         type: !Inherit ti_A
+        variant: !Simple
     impls:
       - lang: "python3"
         required: ["panic"]
@@ -41,18 +46,21 @@ nodes:
 
   - title: "Subtract"
     desc: "Subtracts B from A."
-    end: false
+    exec_kind: !InOut
     fields:
     inputs:
       - name: "A"
         type: !Multi [Int, Float]
         default: !Int 0
+        variant: !Simple
       - name: "B"
         type: !Multi [Int, Float]
         default: !Int 0
+        variant: !Simple
     outputs:
       - name: "result"
         type: !Inherit ti_A
+        variant: !Simple
     impls:
       - lang: "python3"
         required: ["panic"]
@@ -63,18 +71,21 @@ nodes:
 
   - title: "Multiply"
     desc: "Multiplies A by B."
-    end: false
+    exec_kind: !InOut
     fields:
     inputs:
       - name: "A"
         type: !Multi [Int, Float]
         default: !Int 0
+        variant: !Simple
       - name: "B"
         type: !Multi [Int, Float]
         default: !Int 0
+        variant: !Simple
     outputs:
       - name: "result"
         type: !Inherit ti_A
+        variant: !Simple
     impls:
       - lang: "python3"
         required: ["panic"]
@@ -85,18 +96,21 @@ nodes:
 
   - title: "Divide"
     desc: "Divides A by B."
-    end: false
+    exec_kind: !InOut
     fields:
     inputs:
       - name: "A"
         type: !Multi [Int, Float]
         default: !Int 0
+        variant: !Simple
       - name: "B"
         type: !Multi [Int, Float]
         default: !Int 0
+        variant: !Simple
     outputs:
       - name: "result"
         type: !Inherit ti_A
+        variant: !Simple
     impls:
       - lang: "python3"
         required: ["panic"]
@@ -107,18 +121,21 @@ nodes:
 
   - title: "Power"
     desc: "Takes the Bth power of A"
-    end: false
+    exec_kind: !InOut
     fields:
     inputs:
       - name: "A"
         type: !Multi [Int, Float]
         default: !Int 0
+        variant: !Simple
       - name: "B"
         type: !Multi [Int, Float]
         default: !Int 0
+        variant: !Simple
     outputs:
       - name: "result"
         type: !Inherit ti_A
+        variant: !Simple
     impls:
       - lang: "python3"
         required: ["panic"]

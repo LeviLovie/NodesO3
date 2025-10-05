@@ -10,6 +10,7 @@ const STD_LIBS: &[&[u8]] = &[
     include_bytes!("../../std/math.no3lib.yaml"),
     include_bytes!("../../std/string.no3lib.yaml"),
     include_bytes!("../../std/debug.no3lib.yaml"),
+    include_bytes!("../../std/flow.no3lib.yaml"),
 ];
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -23,6 +24,12 @@ pub struct DescLib {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct DescStorage {
     pub libs: Vec<DescLib>,
+}
+
+impl Default for DescStorage {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl DescStorage {

@@ -3,16 +3,17 @@ lib: "Std"
 nodes:
   - title: "String"
     desc: "Output a string constant."
-    end: false
+    exec_kind: !Out
     fields:
       - name: "value"
+        variant: !Simple
         type: !String
         value: !String ""
         kind: !Enter
     inputs:
     outputs:
       - name: "const"
-        # type: !Inherit fi_value
+        variant: !Simple
         type: !String
         default: !String ""
     impls:

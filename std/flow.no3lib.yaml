@@ -1,0 +1,12 @@
+category: "Flow"
+lib: "Std"
+nodes:
+  - title: "Main"
+    desc: "Runs on program start."
+    exec_kind: !OutCondition main
+    fields:
+    inputs:
+    outputs:
+    impls:
+      - lang: "python3"
+        code: ""

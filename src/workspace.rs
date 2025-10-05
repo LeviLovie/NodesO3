@@ -1,6 +1,7 @@
 use anyhow::{bail, Context as AnyhowContext, Result};
 use eframe::egui::{
-    Color32, Context, Frame, Id, LayerId, Order, Pos2, Shadow, Stroke, TextEdit, Ui, Window,
+    Color32, Context, Frame, Id, Label, LayerId, Order, Pos2, Shadow, Stroke, TextEdit,
+    TextWrapMode, Ui, Window,
 };
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, path::PathBuf, rc::Rc};
@@ -8,7 +9,10 @@ use tracing::error;
 
 use crate::{
     compiler::Compilation,
-    graph::{Connection, DescStorage, FieldDesc, FieldKind, Node, Type, Var},
+    graph::{
+        Connection, DescStorage, FieldDesc, FieldKind, Node, PortDesc, PortLocation, PortVariant,
+        Type, Var,
+    },
     Shared,
 };
 
@@ -25,6 +29,7 @@ pub struct Workspace {
     pub data: WorkspaceData,
     pub shared: Rc<RefCell<Shared>>,
     pub dragging_connection: Option<(usize, usize, Pos2)>, // (node_id, port_index, current_pos)>,
+    pub stabilize_frames: usize,
 }
 
 impl Workspace {
@@ -39,6 +44,7 @@ impl Workspace {
             },
             shared,
             dragging_connection: None,
+            stabilize_frames: 10,
         }
     }
 
@@ -78,6 +84,7 @@ impl Workspace {
             data,
             shared,
             dragging_connection: None,
+            stabilize_frames: 10,
         })
     }
 
@@ -122,12 +129,9 @@ impl Workspace {
         let painter_bg = ctx.layer_painter(LayerId::background());
 
         for conn in &self.data.connections {
-            let from = self.data.nodes[conn.from.0].port_pos(conn.from.1, true);
-            let to = self.data.nodes[conn.to.0].port_pos(conn.to.1, false);
-            painter_bg.line_segment(
-                [from, to],
-                Stroke::new(2.0, Color32::from_rgb(109, 148, 197)),
-            );
+            let from_pos = self.data.nodes[conn.from.0].ports()[conn.from.1].1;
+            let to_pos = self.data.nodes[conn.to.0].ports()[conn.to.1].1;
+            painter_bg.line_segment([from_pos, to_pos], Stroke::new(2.0, conn.variant.color()));
         }
     }
 
@@ -135,13 +139,13 @@ impl Workspace {
         let painter_fg = ctx.layer_painter(LayerId::new(Order::Background, Id::new("ports_layer")));
 
         for node in &self.data.nodes {
-            for i in 0..node.desc.inputs.len() {
-                let pos = node.port_pos(i, false);
-                painter_fg.circle_filled(pos, 5.0, Color32::from_rgb(179, 51, 51));
-            }
-            for i in 0..node.desc.outputs.len() {
-                let pos = node.port_pos(i, true);
-                painter_fg.circle_filled(pos, 5.0, Color32::from_rgb(51, 179, 51));
+            for (desc, pos, _location) in node.ports() {
+                let size = match desc.variant {
+                    PortVariant::Execution => 7.5,
+                    PortVariant::Simple => 5.0,
+                };
+
+                painter_fg.circle_filled(pos, size, desc.variant.color());
             }
         }
     }
@@ -149,11 +153,6 @@ impl Workspace {
     fn render_nodes(&mut self, ctx: &Context) {
         for node in &mut self.data.nodes {
             let id = Id::new(format!("{}", node.id));
-            let stroke = if node.desc.end {
-                Stroke::new(1.0, Color32::from_hex("#C0C000").unwrap())
-            } else {
-                Stroke::new(1.0, Color32::from_gray(100))
-            };
             Window::new(format!("{}#{}", node.desc.title, node.id))
                 .id(id)
                 .fixed_pos(node.pos)
@@ -165,19 +164,27 @@ impl Workspace {
                     inner_margin: 6.0.into(),
                     corner_radius: 0.into(),
                     fill: Color32::from_hex("#202020").unwrap(),
-                    stroke,
+                    stroke: Stroke::new(1.0, Color32::from_gray(100)),
                     shadow: Shadow::NONE,
                     ..Default::default()
                 })
                 .show(ctx, |ui| {
                     ui.set_min_height(node.size.1);
                     ui.set_min_width(node.size.0);
-                    if node.stabilize_frames < 10 {
-                        node.stabilize_frames += 1;
+                    if self.stabilize_frames > 0 {
+                        self.stabilize_frames -= 1;
                     } else {
                         node.pos.0 = ui.min_rect().min.x - 7.0;
                         node.pos.1 = ui.min_rect().min.y - 38.0;
                     }
+
+                    let short_desc = if node.desc.desc.len() > 18 {
+                        format!("{}...", node.desc.desc.chars().take(18).collect::<String>())
+                    } else {
+                        node.desc.desc.clone()
+                    };
+                    ui.add(Label::new(short_desc).wrap_mode(TextWrapMode::Extend))
+                        .on_hover_text(node.desc.desc.clone());
 
                     for field in &mut node.desc.fields {
                         Self::field_edit(ui, field);
@@ -192,14 +199,20 @@ impl Workspace {
                 Order::Foreground,
                 Id::new("dragging_connection_layer"),
             ));
-            let from_pos = self.data.nodes[from_node].port_pos(from_port, true);
-            let color = if self
-                .mouse_over_port(self.shared.borrow().cursor, false)
-                .is_some()
+
+            let ports = &self.data.nodes[from_node].ports();
+            let mouse_over_ports = self.mouse_over_ports(self.shared.borrow().cursor);
+
+            let from_pos = ports[from_port].1;
+            let color = match mouse_over_ports
+                .clone()
+                .into_iter()
+                .filter(|(_, _, _, location)| *location == PortLocation::Input)
+                .count()
             {
-                Color32::from_rgb(51, 179, 51)
-            } else {
-                Color32::from_rgb(179, 51, 51)
+                0 => Color32::from_rgb(179, 51, 51),
+                1 => Color32::from_rgb(51, 179, 51),
+                _ => Color32::from_rgb(179, 179, 51),
             };
 
             painter_fg.line_segment([from_pos, current_pos], Stroke::new(2.0, color));
@@ -292,35 +305,43 @@ impl Workspace {
             let to_exists = self.data.nodes.iter().any(|n| n.id == conn.to.0);
             from_exists && to_exists
         });
+        let mut to_ports = Vec::new();
+        let unique_conns = self
+            .data
+            .connections
+            .iter()
+            .rev()
+            .filter(|conn| {
+                let key = (conn.to.0, conn.to.1);
+                if to_ports.contains(&key) {
+                    false
+                } else {
+                    to_ports.push(key);
+                    true
+                }
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        self.data.connections = unique_conns.into_iter().rev().collect();
     }
 
-    pub fn mouse_over_port(
+    pub fn mouse_over_ports(
         &self,
         mouse_pos: Pos2,
-        is_output: bool,
-    ) -> Option<(usize, usize, bool)> {
+    ) -> Vec<((usize, usize), PortDesc, Pos2, PortLocation)> {
+        let mut ports = Vec::new();
+
         for node in &self.data.nodes {
-            if is_output {
-                for i in 0..node.desc.outputs.len() {
-                    let port_pos = node.port_pos(i, true);
-                    let vertical_dist = (port_pos.y - mouse_pos.y).abs();
-                    let horizontal_dist = (port_pos.x - mouse_pos.x).abs();
-                    if vertical_dist < 10.0 && horizontal_dist < 30.0 {
-                        return Some((node.id, i, true));
-                    }
-                }
-            } else {
-                for i in 0..node.desc.inputs.len() {
-                    let port_pos = node.port_pos(i, false);
-                    let vertical_dist = (port_pos.y - mouse_pos.y).abs();
-                    let horizontal_dist = (port_pos.x - mouse_pos.x).abs();
-                    if vertical_dist < 10.0 && horizontal_dist < 30.0 {
-                        return Some((node.id, i, false));
-                    }
+            for (i, (desc, pos, location)) in node.ports().iter().enumerate() {
+                let vertical_dist = (pos.y - mouse_pos.y).abs();
+                let horizontal_dist = (pos.x - mouse_pos.x).abs();
+                if vertical_dist < 10.0 && horizontal_dist < 30.0 {
+                    ports.push(((node.id, i), desc.clone(), *pos, location.clone()));
                 }
             }
         }
-        None
+
+        ports
     }
 
     pub fn add_node(&mut self, category: String, title: String) {
@@ -330,10 +351,9 @@ impl Workspace {
                 pos: self.shared.borrow().add_menu.clone().unwrap().0.into(),
                 size: (
                     120.0,
-                    ((desc.inputs.len() + desc.outputs.len()) as f32) * 20.0,
+                    ((desc.inputs.len() + desc.outputs.len()) as f32 + 1.0) * 20.0,
                 ),
                 desc: desc.clone(),
-                stabilize_frames: 0,
             });
             self.shared.borrow_mut().add_menu = None;
         } else {

@@ -1,12 +1,15 @@
 use anyhow::Result;
 use eframe::egui::{
-    self, Align, Button, CentralPanel, Context, Grid, Layout, MenuBar, Pos2, RichText,
-    TopBottomPanel, Window,
+    self, Align, CentralPanel, Context, Grid, Layout, MenuBar, Pos2, RichText, TopBottomPanel,
+    Window,
 };
 use std::{cell::RefCell, rc::Rc};
 use tracing::{error, info};
 
-use crate::{Compiler, Connection, DialogPurpose, FilePicker, Workspace};
+use crate::{
+    graph::{PortLocation, PortVariant},
+    Connection, DialogPurpose, FilePicker, Workspace,
+};
 
 pub struct Shared {
     pub cursor: Pos2,
@@ -217,38 +220,38 @@ impl App {
                         "Include debug info",
                     );
 
-                    let final_nodes = self
-                        .workspace
-                        .as_ref()
-                        .unwrap()
-                        .data
-                        .nodes
-                        .iter()
-                        .filter(|n| n.desc.end)
-                        .collect::<Vec<_>>();
-                    if ui
-                        .add_enabled(final_nodes.len() == 1, Button::new("Compile"))
-                        .clicked()
-                    {
-                        let mut compiler = Compiler::new(
-                            self.shared.borrow().compile_debug_info,
-                            self.workspace.as_ref().unwrap().data.nodes.clone(),
-                            self.workspace.as_ref().unwrap().data.connections.clone(),
-                            final_nodes[0].id,
-                        );
-                        match compiler.compile() {
-                            Ok(compilation) => {
-                                self.workspace.as_mut().unwrap().data.compilation =
-                                    Some(compilation);
-                            }
-                            Err(e) => {
-                                error!("Compilation failed: {e:?}");
-                                self.shared.borrow_mut().error =
-                                    Some(format!("Compilation failed: {e:?}"));
-                            }
-                        }
-                        ui.close();
-                    }
+                    // let final_nodes = self
+                    //     .workspace
+                    //     .as_ref()
+                    //     .unwrap()
+                    //     .data
+                    //     .nodes
+                    //     .iter()
+                    //     .filter(|n| n.desc.end)
+                    //     .collect::<Vec<_>>();
+                    // if ui
+                    //     .add_enabled(final_nodes.len() == 1, Button::new("Compile"))
+                    //     .clicked()
+                    // {
+                    //     let mut compiler = Compiler::new(
+                    //         self.shared.borrow().compile_debug_info,
+                    //         self.workspace.as_ref().unwrap().data.nodes.clone(),
+                    //         self.workspace.as_ref().unwrap().data.connections.clone(),
+                    //         final_nodes[0].id,
+                    //     );
+                    //     match compiler.compile() {
+                    //         Ok(compilation) => {
+                    //             self.workspace.as_mut().unwrap().data.compilation =
+                    //                 Some(compilation);
+                    //         }
+                    //         Err(e) => {
+                    //             error!("Compilation failed: {e:?}");
+                    //             self.shared.borrow_mut().error =
+                    //                 Some(format!("Compilation failed: {e:?}"));
+                    //         }
+                    //     }
+                    //     ui.close();
+                    // }
                 });
 
                 ui.menu_button("Help", |ui| {
@@ -355,6 +358,12 @@ impl eframe::App for App {
                 self.shared.borrow_mut().add_menu = Some((cursor, None));
             }
 
+            let ports = self
+                .workspace
+                .as_mut()
+                .unwrap()
+                .mouse_over_ports(self.shared.borrow().cursor);
+
             if ctx.input(|i| i.pointer.any_pressed())
                 && self
                     .workspace
@@ -363,69 +372,84 @@ impl eframe::App for App {
                     .dragging_connection
                     .is_none()
             {
-                if let Some((node_id, port_id, _)) = self
-                    .workspace
-                    .as_mut()
-                    .unwrap()
-                    .mouse_over_port(self.shared.borrow().cursor, true)
-                {
-                    self.workspace.as_mut().unwrap().dragging_connection =
-                        Some((node_id, port_id, self.shared.borrow().cursor));
-                }
-
-                if let Some((node_id, port_id, _)) = self
-                    .workspace
-                    .as_mut()
-                    .unwrap()
-                    .mouse_over_port(self.shared.borrow().cursor, false)
-                    && self
-                        .workspace
-                        .as_mut()
-                        .unwrap()
-                        .data
-                        .connections
-                        .iter()
-                        .any(|c| c.to.0 == node_id && c.to.1 == port_id)
-                    && let Some((from_node, from_port)) = self
-                        .workspace
-                        .as_ref()
-                        .unwrap()
-                        .data
-                        .connections
-                        .iter()
-                        .find(|c| c.to.0 == node_id && c.to.1 == port_id)
-                        .map(|c| c.from)
-                {
-                    self.workspace
-                        .as_mut()
-                        .unwrap()
-                        .data
-                        .connections
-                        .retain(|c| !(c.to.0 == node_id && c.to.1 == port_id));
-                    self.workspace.as_mut().unwrap().dragging_connection =
-                        Some((from_node, from_port, self.shared.borrow().cursor));
+                for ((node_id, port_id), _, _, location) in &ports {
+                    match location {
+                        PortLocation::Output => {
+                            self.workspace.as_mut().unwrap().dragging_connection =
+                                Some((*node_id, *port_id, self.shared.borrow().cursor));
+                        }
+                        PortLocation::Input => {
+                            if self
+                                .workspace
+                                .as_mut()
+                                .unwrap()
+                                .data
+                                .connections
+                                .iter()
+                                .any(|c| c.to.0 == *node_id && c.to.1 == *port_id)
+                                && let Some((from_node, from_port)) = self
+                                    .workspace
+                                    .as_ref()
+                                    .unwrap()
+                                    .data
+                                    .connections
+                                    .iter()
+                                    .find(|c| c.to.0 == *node_id && c.to.1 == *port_id)
+                                    .map(|c| c.from)
+                            {
+                                self.workspace
+                                    .as_mut()
+                                    .unwrap()
+                                    .data
+                                    .connections
+                                    .retain(|c| !(c.to.0 == *node_id && c.to.1 == *port_id));
+                                self.workspace.as_mut().unwrap().dragging_connection =
+                                    Some((from_node, from_port, self.shared.borrow().cursor));
+                            }
+                        }
+                    }
                 }
             }
 
-            if ctx.input(|i| i.pointer.any_released())
-                && let Some((from_node_id, from_port_id, current_pos)) =
-                    self.workspace.as_mut().unwrap().dragging_connection.take()
-                && let Some((to_node_id, to_port_id, _)) = self
-                    .workspace
-                    .as_ref()
-                    .unwrap()
-                    .mouse_over_port(current_pos, false)
-            {
-                self.workspace
-                    .as_mut()
-                    .unwrap()
-                    .data
-                    .connections
-                    .push(Connection {
-                        from: (from_node_id, from_port_id),
-                        to: (to_node_id, to_port_id),
-                    });
-                self.workspace.as_mut().unwrap().verify_connections();
+            if ctx.input(|i| i.pointer.any_released()) {
+                for ((node_id, port_id), to_desc, _, location) in &ports {
+                    if location == &PortLocation::Input
+                        && let Some((from_node_id, from_port_id, _)) =
+                            self.workspace.as_mut().unwrap().dragging_connection.take()
+                    {
+                        let from_node = self
+                            .workspace
+                            .as_ref()
+                            .unwrap()
+                            .data
+                            .nodes
+                            .iter()
+                            .find(|n| n.id == from_node_id)
+                            .unwrap();
+                        let from_ports = from_node.ports();
+                        let from_port = from_ports
+                            .iter()
+                            .enumerate()
+                            .find(|(i, _)| *i == from_port_id);
+                        if let Some((_, (from_desc, _, _))) = from_port
+                            && from_desc.variant == to_desc.variant
+                        {
+                            self.workspace
+                                .as_mut()
+                                .unwrap()
+                                .data
+                                .connections
+                                .push(Connection {
+                                    variant: PortVariant::Simple,
+                                    from: (from_node_id, from_port_id),
+                                    to: (*node_id, *port_id),
+                                });
+                            self.workspace.as_mut().unwrap().verify_connections();
+                        }
+                    }
+                }
+
+                self.workspace.as_mut().unwrap().dragging_connection = None;
             }
 
             CentralPanel::default().show(ctx, |_| {});
