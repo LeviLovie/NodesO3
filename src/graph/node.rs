@@ -10,7 +10,6 @@ const EXECUTION_OFFSET: f32 = 16.0;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum NodeExecKind {
     In,
-    Out,
     OutCondition(String),
     InOut,
     InChooseOut(usize),

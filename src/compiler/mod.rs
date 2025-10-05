@@ -1,16 +1,10 @@
 mod compilation;
-mod iomap;
-mod node_map;
-mod traversal;
-mod type_map;
+mod maps;
 mod writer;
 
 pub use compilation::Compilation;
-pub use iomap::IOMap;
-pub use node_map::NodeMap;
-pub use traversal::UpstreamTraversal;
-pub use type_map::TypeMap;
-pub use writer::write;
+pub use maps::*;
+// pub use writer::write;
 
 use anyhow::{anyhow, Context, Result};
 use tracing::{debug, info};
@@ -25,11 +19,22 @@ pub enum Stage {
     Maps {
         node_map: NodeMap,
         io_map: IOMap,
+        exec_map: ExecMap,
+        join_map: JoinMap,
+        types_map: TypesMap<String>,
     },
-    Traversal {
-        node_map: NodeMap,
+    ExecTraversal {
+        exec_map: ExecMap,
+        join_map: JoinMap,
         io_map: IOMap,
-        traversal: UpstreamTraversal,
+        node_map: NodeMap,
+    },
+    DepResolution {
+        io_map: IOMap,
+        node_map: NodeMap,
+    },
+    CodeGen {
+        node_map: NodeMap,
     },
     Finished(String),
 }
@@ -39,32 +44,28 @@ impl std::fmt::Display for Stage {
         match self {
             Stage::Raw { .. } => write!(f, "Raw"),
             Stage::Maps { .. } => write!(f, "Maps"),
-            Stage::Traversal { .. } => write!(f, "Traversal"),
+            Stage::ExecTraversal { .. } => write!(f, "ExecTraversal"),
+            Stage::DepResolution { .. } => write!(f, "DepResolution"),
+            Stage::CodeGen { .. } => write!(f, "CodeGen"),
             Stage::Finished(_) => write!(f, "Finished"),
         }
     }
 }
 
 pub struct Compiler {
-    final_node: usize,
     debug_info: bool,
     stage: Stage,
     compilation: Compilation,
 }
 
 impl Compiler {
-    pub fn new(
-        debug_info: bool,
-        nodes: Vec<Node>,
-        conns: Vec<Connection>,
-        final_node: usize,
-    ) -> Self {
+    pub fn new(debug_info: bool, nodes: Vec<Node>, conns: Vec<Connection>) -> Self {
         let stage = Stage::Raw {
             nodes: nodes.clone(),
             conns: conns.clone(),
         };
+
         Self {
-            final_node,
             debug_info,
             stage,
             compilation: Compilation::new(),
@@ -79,30 +80,10 @@ impl Compiler {
 
                 Ok(Stage::Maps { node_map, io_map })
             }
-            Stage::Maps { node_map, io_map } => {
-                let mut traversal = UpstreamTraversal::new();
-                traversal.traverse(self.final_node, node_map, io_map);
-
-                Ok(Stage::Traversal {
-                    node_map: node_map.clone(),
-                    io_map: io_map.clone(),
-                    traversal,
-                })
-            }
-            Stage::Traversal {
-                traversal,
-                node_map,
-                io_map,
-            } => {
-                let output = write(
-                    self.debug_info,
-                    node_map.clone(),
-                    io_map.clone(),
-                    traversal.clone(),
-                )
-                .context("Failed to write output")?;
-                Ok(Stage::Finished(output))
-            }
+            Stage::Maps { .. } => Err(anyhow!("Not implemented")),
+            Stage::ExecTraversal { .. } => Err(anyhow!("Not implemented")),
+            Stage::DepResolution { .. } => Err(anyhow!("Not implemented")),
+            Stage::CodeGen { .. } => Err(anyhow!("Not implemented")),
             Stage::Finished(_) => Err(anyhow!("Already finished")),
         };
 

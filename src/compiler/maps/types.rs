@@ -3,14 +3,14 @@ use std::collections::HashMap;
 use crate::graph::Type;
 
 #[derive(Clone, Debug)]
-pub struct TypeMap<T>
+pub struct TypesMap<T>
 where
     T: std::cmp::Eq + std::hash::Hash,
 {
     map: HashMap<T, Type>,
 }
 
-impl<T> TypeMap<T>
+impl<T> TypesMap<T>
 where
     T: std::cmp::Eq + std::hash::Hash + std::fmt::Debug,
 {
