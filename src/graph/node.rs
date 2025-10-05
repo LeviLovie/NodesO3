@@ -13,7 +13,7 @@ pub enum NodeExecKind {
     Out,
     OutCondition(String),
     InOut,
-    InChooseOut(Vec<String>),
+    InChooseOut(usize),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -66,7 +66,7 @@ impl Node {
             NodeExecKind::Out => (0, 1),
             NodeExecKind::OutCondition(_) => (0, 1),
             NodeExecKind::InOut => (1, 1),
-            NodeExecKind::InChooseOut(ref choices) => (1, choices.len()),
+            NodeExecKind::InChooseOut(ref choices) => (1, *choices),
         };
 
         let mut ports = Vec::new();

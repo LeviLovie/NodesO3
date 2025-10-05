@@ -10,3 +10,13 @@ nodes:
     impls:
       - lang: "python3"
         code: ""
+
+  - title: "Split"
+    desc: "Runs both paths"
+    exec_kind: !InChooseOut 2
+    fields:
+    inputs:
+    outputs:
+    impls:
+      - lang: "python3"
+        code: ""
