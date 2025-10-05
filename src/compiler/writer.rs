@@ -1,4 +1,4 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 
 use crate::compiler::{IOMap, NodeMap, UpstreamTraversal};
 
@@ -44,7 +44,17 @@ fn write_node(
         output.push_str(&format!("# Node {}#{}\n", node.desc.title, node.id));
     }
 
-    let mut py_impl = node.desc.py_impl.trim().trim_end_matches("\n").to_string();
+    let mut py_impl = node
+        .impl_for_lang("python3")
+        .ok_or_else(|| {
+            anyhow!(
+                "No Python3 implementation found for node {}#{}",
+                node.desc.title,
+                node.id
+            )
+        })?
+        .code
+        .to_string();
     replace(
         &mut py_impl,
         "{title}".to_string(),

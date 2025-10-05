@@ -1,5 +1,5 @@
 category: "Debug"
-crate: "Std"
+lib: "Std"
 nodes:
   - title: "Print"
     desc: "Prints the input value to the console."

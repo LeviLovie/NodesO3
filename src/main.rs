@@ -12,6 +12,7 @@ use eframe::egui::{
 
 use compiler::Compiler;
 use graph::Connection;
+use tracing::error;
 use workspace::Workspace;
 
 struct Shared {
@@ -50,17 +51,17 @@ impl App {
         if self.workspace.is_none() {
             return Err(anyhow!("Workspace is None in load_nodes_result"));
         }
-        let yaml = std::fs::read_to_string("nodes.yaml").context("Failed to read nodes.yaml")?;
         self.workspace
             .as_mut()
             .unwrap()
-            .load_nodes(yaml)
-            .context("Failed to load nodes.yaml")?;
+            .load_nodes()
+            .context("Failed to load nodes")?;
         Ok(())
     }
 
     fn load_nodes(&mut self) {
         if let Err(e) = self.load_nodes_result() {
+            error!("Failed to load nodes: {e:?}");
             self.shared.borrow_mut().error = Some(format!("Failed to load nodes: {e:?}"));
         }
     }
@@ -92,7 +93,7 @@ impl App {
 
         let add_menu = self.shared.borrow().add_menu.clone().unwrap();
         let mut reset_menu = false;
-        let mut add: Option<usize> = None;
+        let mut add: Option<(String, String)> = None;
 
         Window::new(format!(
             "Add {}",
@@ -116,19 +117,19 @@ impl App {
                     reset_menu = true;
                 }
 
-                for (i, desc) in self
+                if let Some(descs) = self
                     .workspace
                     .as_ref()
                     .unwrap()
                     .data
                     .desc_storage
-                    .descs
-                    .iter()
-                    .enumerate()
+                    .descs_category(&category)
                 {
-                    if desc.category == *category && ui.button(&desc.title).clicked() {
-                        add = Some(i);
-                        reset_menu = true;
+                    for desc in descs {
+                        if ui.button(&desc.title).clicked() {
+                            add = Some((category.clone(), desc.title.clone()));
+                            reset_menu = true;
+                        }
                     }
                 }
             } else {
@@ -138,7 +139,7 @@ impl App {
                     .unwrap()
                     .data
                     .desc_storage
-                    .categories
+                    .categories()
                 {
                     if ui.button(category).clicked() {
                         self.shared.borrow_mut().add_menu =
@@ -152,8 +153,8 @@ impl App {
             self.shared.borrow_mut().add_menu = Some((add_menu.0, None));
         }
 
-        if let Some(i) = add {
-            self.workspace.as_mut().unwrap().add_node(i);
+        if let Some((category, title)) = add {
+            self.workspace.as_mut().unwrap().add_node(category, title);
             self.shared.borrow_mut().add_menu = None;
         }
     }
@@ -215,34 +216,6 @@ impl App {
                             ui.close();
                         }
                         ui.label("Shift+A");
-                        ui.end_row();
-                    });
-                });
-
-                ui.menu_button("Descs", |ui| {
-                    Grid::new("Descs").show(ui, |ui| {
-                        if ui.button("Clear").clicked() {
-                            self.workspace
-                                .as_mut()
-                                .unwrap()
-                                .data
-                                .desc_storage
-                                .descs
-                                .clear();
-                            ui.close();
-                        }
-                        ui.end_row();
-
-                        if ui.button("Reload").clicked() {
-                            self.load_nodes();
-                            ui.close();
-                        }
-                        ui.end_row();
-
-                        if ui.button("Re-attach").clicked() {
-                            self.workspace.as_mut().unwrap().reattach();
-                            ui.close();
-                        }
                         ui.end_row();
                     });
                 });
@@ -423,6 +396,12 @@ impl eframe::App for App {
 }
 
 fn main() -> Result<()> {
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::new(
+            "debug,eframe=warn,winit=warn,egui_glow=warn",
+        ))
+        .init();
+
     let app = App::new().context("Creating app")?;
     let options = eframe::NativeOptions::default();
     eframe::run_native(

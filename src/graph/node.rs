@@ -15,15 +15,22 @@ pub struct Node {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NodeImpl {
+    pub lang: String,
+    pub required: Option<Vec<String>>,
+    pub type_check: Option<String>,
+    pub code: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeDesc {
     pub title: String,
     pub end: bool,
     pub desc: String,
-    pub category: String,
     pub fields: Vec<FieldDesc>,
     pub inputs: Vec<PortDesc>,
     pub outputs: Vec<PortDesc>,
-    pub py_impl: String,
+    pub impls: Vec<NodeImpl>,
 }
 
 impl Node {
@@ -35,5 +42,9 @@ impl Node {
             self.pos.0
         };
         Pos2 { x, y }
+    }
+
+    pub fn impl_for_lang(&self, lang: &str) -> Option<&NodeImpl> {
+        self.desc.impls.iter().find(|ni| ni.lang == lang)
     }
 }
