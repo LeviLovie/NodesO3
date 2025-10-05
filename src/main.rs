@@ -316,14 +316,49 @@ impl eframe::App for App {
                     .unwrap()
                     .dragging_connection
                     .is_none()
-                && let Some((node_id, port_id, _)) = self
+            {
+                if let Some((node_id, port_id, _)) = self
                     .workspace
                     .as_mut()
                     .unwrap()
                     .mouse_over_port(self.shared.borrow().cursor, true)
-            {
-                self.workspace.as_mut().unwrap().dragging_connection =
-                    Some((node_id, port_id, self.shared.borrow().cursor));
+                {
+                    self.workspace.as_mut().unwrap().dragging_connection =
+                        Some((node_id, port_id, self.shared.borrow().cursor));
+                }
+
+                if let Some((node_id, port_id, _)) = self
+                    .workspace
+                    .as_mut()
+                    .unwrap()
+                    .mouse_over_port(self.shared.borrow().cursor, false)
+                    && self
+                        .workspace
+                        .as_mut()
+                        .unwrap()
+                        .data
+                        .connections
+                        .iter()
+                        .any(|c| c.to.0 == node_id && c.to.1 == port_id)
+                    && let Some((from_node, from_port)) = self
+                        .workspace
+                        .as_ref()
+                        .unwrap()
+                        .data
+                        .connections
+                        .iter()
+                        .find(|c| c.to.0 == node_id && c.to.1 == port_id)
+                        .map(|c| c.from)
+                {
+                    self.workspace
+                        .as_mut()
+                        .unwrap()
+                        .data
+                        .connections
+                        .retain(|c| !(c.to.0 == node_id && c.to.1 == port_id));
+                    self.workspace.as_mut().unwrap().dragging_connection =
+                        Some((from_node, from_port, self.shared.borrow().cursor));
+                }
             }
 
             if ctx.input(|i| i.pointer.any_released())

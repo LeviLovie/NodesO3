@@ -44,7 +44,7 @@
       default: !Int 0
   outputs:
     - name: "result"
-      type: !Int
+      type: !Multi [Int, Float]
       default: !Int 0
   py_impl: |
     if "{ti_A}" != "{ti_B}":

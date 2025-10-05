@@ -3,9 +3,22 @@
 def panic(msg: str) -> None:
     raise RuntimeError(f"PANIC: {msg}")
 
-output_0_0 = 5.5
-output_1_0 = "sfe"
-if "[Int, Float, String]" != "String":
-  panic("Add#2: Type mismatch: [Int, Float, String] vs String")
-output_2_0 = output_0_0 + output_1_0
-print(output_2_0)
+# Node Const#3
+output_3_0 = 5.5
+
+# Node Const#4
+output_4_0 = 6
+
+# Node Add#2
+if "[Int, Float]" != "[Int, Float]":
+  panic("Add#2: Type mismatch: [Int, Float] vs [Int, Float]")
+output_2_0 = output_3_0 + output_4_0
+
+# Node Add#1
+if "[Int, Float]" != "[Int, Float]":
+  panic("Add#1: Type mismatch: [Int, Float] vs [Int, Float]")
+output_1_0 = output_3_0 + output_2_0
+
+# Node Print#0
+print(output_1_0)
+

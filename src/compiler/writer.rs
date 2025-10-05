@@ -41,7 +41,7 @@ fn write_node(
 ) -> Result<String> {
     let mut output = String::new();
     if debug_info {
-        output.push_str(&format!("# Node {}#{}\n\n", node.desc.title, node.id));
+        output.push_str(&format!("# Node {}#{}\n", node.desc.title, node.id));
     }
 
     let mut py_impl = node.desc.py_impl.trim().trim_end_matches("\n").to_string();
