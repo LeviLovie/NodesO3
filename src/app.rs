@@ -8,7 +8,7 @@ use tracing::{error, info};
 
 use crate::{
     graph::{PortLocation, PortVariant},
-    Connection, DialogPurpose, FilePicker, Workspace,
+    Compiler, Connection, DialogPurpose, FilePicker, Workspace,
 };
 
 pub struct Shared {
@@ -220,38 +220,25 @@ impl App {
                         "Include debug info",
                     );
 
-                    // let final_nodes = self
-                    //     .workspace
-                    //     .as_ref()
-                    //     .unwrap()
-                    //     .data
-                    //     .nodes
-                    //     .iter()
-                    //     .filter(|n| n.desc.end)
-                    //     .collect::<Vec<_>>();
-                    // if ui
-                    //     .add_enabled(final_nodes.len() == 1, Button::new("Compile"))
-                    //     .clicked()
-                    // {
-                    //     let mut compiler = Compiler::new(
-                    //         self.shared.borrow().compile_debug_info,
-                    //         self.workspace.as_ref().unwrap().data.nodes.clone(),
-                    //         self.workspace.as_ref().unwrap().data.connections.clone(),
-                    //         final_nodes[0].id,
-                    //     );
-                    //     match compiler.compile() {
-                    //         Ok(compilation) => {
-                    //             self.workspace.as_mut().unwrap().data.compilation =
-                    //                 Some(compilation);
-                    //         }
-                    //         Err(e) => {
-                    //             error!("Compilation failed: {e:?}");
-                    //             self.shared.borrow_mut().error =
-                    //                 Some(format!("Compilation failed: {e:?}"));
-                    //         }
-                    //     }
-                    //     ui.close();
-                    // }
+                    if ui.button("Compile").clicked() {
+                        let mut compiler = Compiler::new(
+                            self.shared.borrow().compile_debug_info,
+                            self.workspace.as_ref().unwrap().data.nodes.clone(),
+                            self.workspace.as_ref().unwrap().data.connections.clone(),
+                        );
+                        match compiler.compile() {
+                            Ok(compilation) => {
+                                self.workspace.as_mut().unwrap().data.compilation =
+                                    Some(compilation);
+                            }
+                            Err(e) => {
+                                error!("Compilation failed: {e:?}");
+                                self.shared.borrow_mut().error =
+                                    Some(format!("Compilation failed: {e:?}"));
+                            }
+                        }
+                        ui.close();
+                    }
                 });
 
                 ui.menu_button("Help", |ui| {
@@ -440,7 +427,7 @@ impl eframe::App for App {
                                 .data
                                 .connections
                                 .push(Connection {
-                                    variant: PortVariant::Simple,
+                                    variant: from_desc.variant.clone(),
                                     from: (from_node_id, from_port_id),
                                     to: (*node_id, *port_id),
                                 });

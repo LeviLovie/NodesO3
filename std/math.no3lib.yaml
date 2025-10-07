@@ -3,7 +3,7 @@ lib: "Std"
 nodes:
   - title: "Const"
     desc: "Outputs a constant value."
-    exec_kind: !Out
+    exec_kind: !InOut
     fields:
       - name: "value"
         type: !Multi [Int, Float]

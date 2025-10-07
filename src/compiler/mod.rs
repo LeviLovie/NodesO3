@@ -1,40 +1,39 @@
 mod compilation;
 mod maps;
-mod writer;
+mod stages;
 
 pub use compilation::Compilation;
 pub use maps::*;
+pub use stages::*;
 // pub use writer::write;
 
 use anyhow::{anyhow, Context, Result};
 use tracing::{debug, info};
 
-use crate::graph::{Connection, Node};
+use crate::graph::{Connection, Node, PortVariant};
 
 pub enum Stage {
-    Raw {
+    Maps {
         nodes: Vec<Node>,
         conns: Vec<Connection>,
     },
-    Maps {
-        node_map: NodeMap,
-        io_map: IOMap,
-        exec_map: ExecMap,
-        join_map: JoinMap,
-        types_map: TypesMap<String>,
-    },
     ExecTraversal {
+        node_map: NodeMap,
+        io_map: IOMap,
         exec_map: ExecMap,
         join_map: JoinMap,
-        io_map: IOMap,
-        node_map: NodeMap,
+        types_map: TypesMap,
     },
     DepResolution {
-        io_map: IOMap,
+        exec_traversal: ExecTraversal,
         node_map: NodeMap,
+        io_map: IOMap,
     },
     CodeGen {
+        exec_traversal: ExecTraversal,
+        deps: Deps,
         node_map: NodeMap,
+        io_map: IOMap,
     },
     Finished(String),
 }
@@ -42,7 +41,6 @@ pub enum Stage {
 impl std::fmt::Display for Stage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Stage::Raw { .. } => write!(f, "Raw"),
             Stage::Maps { .. } => write!(f, "Maps"),
             Stage::ExecTraversal { .. } => write!(f, "ExecTraversal"),
             Stage::DepResolution { .. } => write!(f, "DepResolution"),
@@ -60,7 +58,7 @@ pub struct Compiler {
 
 impl Compiler {
     pub fn new(debug_info: bool, nodes: Vec<Node>, conns: Vec<Connection>) -> Self {
-        let stage = Stage::Raw {
+        let stage = Stage::Maps {
             nodes: nodes.clone(),
             conns: conns.clone(),
         };
@@ -74,16 +72,77 @@ impl Compiler {
 
     pub fn step(&mut self) -> Result<()> {
         let result = match &self.stage {
-            Stage::Raw { nodes, conns } => {
+            Stage::Maps { nodes, conns } => {
                 let node_map = NodeMap::new(nodes);
-                let io_map = IOMap::new(conns);
+                let io_map = IOMap::new(conns, PortVariant::Simple);
+                let exec_io_map = IOMap::new(conns, PortVariant::Execution);
+                exec_io_map.print();
+                let exec_map = ExecMap::fill_from_nodes(&node_map, &exec_io_map);
+                exec_map.print();
+                let join_map = JoinMap::fill_from_exec_map(&exec_map);
+                let types_map = TypesMap::fill_from_nodes(&node_map);
 
-                Ok(Stage::Maps { node_map, io_map })
+                Ok(Stage::ExecTraversal {
+                    node_map,
+                    io_map,
+                    exec_map,
+                    join_map,
+                    types_map,
+                })
             }
-            Stage::Maps { .. } => Err(anyhow!("Not implemented")),
-            Stage::ExecTraversal { .. } => Err(anyhow!("Not implemented")),
-            Stage::DepResolution { .. } => Err(anyhow!("Not implemented")),
-            Stage::CodeGen { .. } => Err(anyhow!("Not implemented")),
+            Stage::ExecTraversal {
+                node_map,
+                io_map,
+                exec_map,
+                join_map,
+                types_map,
+            } => {
+                let mut exec_traversal = ExecTraversal::new();
+
+                for node in exec_map.starting_nodes() {
+                    exec_traversal.search(*node, node_map, io_map, exec_map, join_map, types_map);
+                }
+
+                exec_traversal.print();
+
+                Ok(Stage::DepResolution {
+                    exec_traversal,
+                    io_map: io_map.clone(),
+                    node_map: node_map.clone(),
+                })
+            }
+            Stage::DepResolution {
+                exec_traversal,
+                io_map,
+                node_map,
+            } => {
+                let mut deps = Deps::new();
+                deps.build(exec_traversal, io_map);
+
+                Ok(Stage::CodeGen {
+                    exec_traversal: exec_traversal.clone(),
+                    deps,
+                    node_map: node_map.clone(),
+                    io_map: io_map.clone(),
+                })
+            }
+            Stage::CodeGen {
+                exec_traversal,
+                deps,
+                node_map,
+                io_map,
+            } => {
+                let codegen = CodeGen::new(
+                    self.debug_info,
+                    node_map.clone(),
+                    io_map.clone(),
+                    exec_traversal.clone(),
+                    deps.clone(),
+                );
+                let code = codegen.generate()?;
+
+                Ok(Stage::Finished(code))
+            }
             Stage::Finished(_) => Err(anyhow!("Already finished")),
         };
 

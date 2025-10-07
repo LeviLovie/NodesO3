@@ -9,11 +9,11 @@ nodes:
     outputs:
     impls:
       - lang: "python3"
-        code: "{out}"
+        code: "{out_1}"
 
   - title: "Split"
     desc: "Runs both paths"
-    exec_kind: !InOutChoose (1, 2)
+    exec_kind: !InOutChoose [1, 2]
     fields:
     inputs:
     outputs:
@@ -27,10 +27,10 @@ nodes:
 
   - title: "Join"
     desc: "Waits until both paths are executed and only then continues onwards."
-    exec_kind: !InOutChoose (2, 1)
+    exec_kind: !InOutChoose [2, 1]
     fields:
     inputs:
     outputs:
     impls:
       - lang: "python3"
-        code: "{out}"
+        code: "{out_1}"

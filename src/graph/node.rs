@@ -12,7 +12,7 @@ pub enum NodeExecKind {
     In,
     OutCondition(String),
     InOut,
-    InChooseOut(usize),
+    InOutChoose((usize, usize)),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -62,10 +62,9 @@ impl Node {
     pub fn ports(&self) -> Vec<(PortDesc, Pos2, PortLocation)> {
         let (exec_ins, exec_outs) = match self.desc.exec_kind {
             NodeExecKind::In => (1, 0),
-            NodeExecKind::Out => (0, 1),
             NodeExecKind::OutCondition(_) => (0, 1),
             NodeExecKind::InOut => (1, 1),
-            NodeExecKind::InChooseOut(ref choices) => (1, *choices),
+            NodeExecKind::InOutChoose((ins, outs)) => (ins, outs),
         };
 
         let mut ports = Vec::new();

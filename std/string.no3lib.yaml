@@ -1,21 +1,21 @@
 category: "String"
 lib: "Std"
 nodes:
-  - title: "String"
-    desc: "Output a string constant."
-    exec_kind: !Out
-    fields:
-      - name: "value"
-        variant: !Simple
-        type: !String
-        value: !String ""
-        kind: !Enter
-    inputs:
-    outputs:
-      - name: "const"
-        variant: !Simple
-        type: !String
-        default: !String ""
-    impls:
-      - lang: "python3"
-        code: "{o_const} = {f_value}"
+  # - title: "String"
+  #   desc: "Output a string constant."
+  #   exec_kind: !Out
+  #   fields:
+  #     - name: "value"
+  #       variant: !Simple
+  #       type: !String
+  #       value: !String ""
+  #       kind: !Enter
+  #   inputs:
+  #   outputs:
+  #     - name: "const"
+  #       variant: !Simple
+  #       type: !String
+  #       default: !String ""
+  #   impls:
+  #     - lang: "python3"
+  #       code: "{o_const} = {f_value}"

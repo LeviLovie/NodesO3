@@ -4,19 +4,23 @@ use crate::graph::Node;
 
 #[derive(Clone)]
 pub struct NodeMap {
-    node_map: HashMap<usize, Node>,
+    pub map: HashMap<usize, Node>,
 }
 
 impl NodeMap {
     pub fn new(nodes: &Vec<Node>) -> Self {
-        let mut node_map = HashMap::new();
+        let mut map = HashMap::new();
         for node in nodes {
-            node_map.insert(node.id, node.clone());
+            map.insert(node.id, node.clone());
         }
-        Self { node_map }
+        Self { map }
     }
 
     pub fn get(&self, id: usize) -> Option<&Node> {
-        self.node_map.get(&id)
+        self.map.get(&id)
+    }
+
+    pub fn values(&self) -> impl Iterator<Item = &Node> {
+        self.map.values()
     }
 }
